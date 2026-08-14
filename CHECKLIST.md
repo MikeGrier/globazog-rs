@@ -147,7 +147,7 @@ native Linux backend is blocked on a Linux test environment (this host is Window
   (`tempfile`) enumerated with metadata assertions, plus signal coalescing /
   cross-thread wakeup. 5 tests.
 
-- [ ] **M5-4. Native Windows backend** (D-4, D-9, D-13, D-30): relative
+- [x] **M5-4. Native Windows backend** (D-4, D-9, D-13, D-30): relative
   `NtCreateFile` + `NtQueryDirectoryFile` (`FILE_ID_EXTD_DIR_INFORMATION`: inline
   attrs, reparse tag, 128-bit file id), NT-layer long/`\?\` paths. Testable on this
   Windows host; slots in behind the M5-1 contract.

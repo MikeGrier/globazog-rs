@@ -9,6 +9,9 @@
 
 pub mod signal;
 
+#[cfg(windows)]
+pub mod win;
+
 use crate::predicate::{EntryMeta, EntryType};
 use crate::syntax::{decode, CodePoint};
 use std::fs;
