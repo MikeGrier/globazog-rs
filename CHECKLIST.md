@@ -60,8 +60,8 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
 
 - [x] **M2-3. Single- + cross-segment matcher** (D-46): `match_segment`
   (backtracking; `*` / `?` / alternation) and `match_path` (`**` zero-or-more,
-  whole-segment) with the `CaseSensitivity` option (D-23). Case fold is **interim
-  ASCII** (D-28) — full Unicode simple fold is M2-6. 17 tests.
+  whole-segment) with the `CaseSensitivity` option (D-23). Case fold uses the
+  Windows ordinal uppercase table (D-28, M2-6). 17 tests.
 
 - [x] **M2-4. Path-structure primitives** (D-25, D-26): `syntax::path` —
   `split_segments` (collapses consecutive separators; UNC hook left to `win`, M3)
@@ -72,10 +72,12 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
   `literal_of` (segment → literal, for mid-pattern pruning D-34) and
   `literal_prefix` (leading literal seek target). 5 tests.
 
-- [ ] **M2-6. Full Unicode simple case folding** (D-28). Replace the interim ASCII
-  fold in `syntax::matcher` with Unicode *simple* case folding (needs a fold data
-  table or a crate such as `caseless` / `unicode-case-mapping`). **Gated on a
-  dependency / data-source decision** — flagged to owner.
+- [x] **M2-6. Windows ordinal uppercase-table case folding** (D-28). `syntax::upcase`
+  — a 973-entry BMP delta table snapshotted from `RtlUpcaseUnicodeChar` via
+  `tools/gen-upcase-table.ps1` (frozen/gospel) — replaces the interim ASCII fold;
+  matches `CompareStringOrdinal(bIgnoreCase)`, no normalization. Latin-1 / Greek /
+  Cyrillic fold, base letters not conflated (`a`≠`á`), supplementary / escaped
+  identity. 4 fold tests.
 
 ## M3 — Dialects & pattern-set
 

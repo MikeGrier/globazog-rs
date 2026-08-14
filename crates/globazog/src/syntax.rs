@@ -13,6 +13,8 @@ pub mod decode;
 pub mod matcher;
 pub mod path;
 
+mod upcase;
+
 /// A Unicode code point in the matcher's 32-bit space (D-46). Unlike [`char`] this
 /// may hold an unpaired surrogate (Windows) or a surrogate-escaped byte (Linux), so
 /// it is a raw `u32`, not a `char`.

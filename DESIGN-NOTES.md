@@ -214,10 +214,19 @@ escaping that follows.
   `*`/`?` still match them. (Resolves O-7 and the parked name-side encoding.)
 - **D-27. No Unicode normalization in v1.** Composed vs decomposed do not match.
   **Conscious deferral**, revisit before 1.0.
-- **D-28. Case-insensitive = Unicode *simple* case folding** (1:1 per code point,
-  no normalization, no full-fold expansions; ASCII fast path). May diverge from an
-  OS uppercase table in exotic code points — acceptable (we own semantics;
-  pushdown re-matches authoritatively).
+- **D-28. Case-insensitive = Windows ordinal uppercase-table fold** — matching
+  `CompareStringOrdinal(bIgnoreCase)` / .NET `OrdinalIgnoreCase`, which Microsoft
+  recommends for **file paths**. Fold = **uppercase each code point via the OS
+  uppercase table** (`RtlUpcaseUnicodeChar`), then compare ordinally; **no
+  normalization** (D-27) — so `'á'`↔`'Á'` match, `'a'`≠`'á'`, and composed vs
+  decomposed never match. Folding is **per BMP code point**; surrogate /
+  supplementary / surrogate-escaped values fold to themselves (identity),
+  consistent with the code-point matcher (D-46). The table is **snapshotted once
+  and embedded** (frozen → gospel; it does not drift with OS/Unicode updates, and
+  may differ from a specific NTFS volume's `$UpCase` — acceptable, we own
+  semantics), and is used for all case-insensitive matching.
+  *(Supersedes the earlier "Unicode simple case folding" phrasing; the interim
+  ASCII fold in `syntax::matcher` is replaced in M2-6.)*
 - **D-29. Leading dot is not special**; `.` is an ordinary literal. **Hidden
   filtering is a separate predicate** (deliberate divergence from bash).
 - **D-30. Trailing dots/spaces are ordinary ordinal characters.** `foo ` matches

@@ -107,9 +107,30 @@ fn case_insensitive_ascii() {
 }
 
 #[test]
-fn case_insensitive_leaves_nonascii() {
-    // 'É' (U+00C9) and 'é' (U+00E9) do not fold under the interim ASCII fold.
-    assert!(!match_segment(&[Token::Literal(0x00C9)], &[0x00E9], CI));
+fn case_insensitive_latin1_folds() {
+    // 'É' (U+00C9) matches 'é' (U+00E9) via the Windows uppercase table (D-28).
+    assert!(match_segment(&[Token::Literal(0x00C9)], &[0x00E9], CI));
+    assert!(!match_segment(&[Token::Literal(0x00C9)], &[0x00E9], CS));
+}
+
+#[test]
+fn case_insensitive_greek_and_cyrillic() {
+    // Greek α/Α (U+03B1 / U+0391) and Cyrillic а/А (U+0430 / U+0410).
+    assert!(match_segment(&[Token::Literal(0x0391)], &[0x03B1], CI));
+    assert!(match_segment(&[Token::Literal(0x0410)], &[0x0430], CI));
+}
+
+#[test]
+fn case_insensitive_does_not_conflate_base_letters() {
+    // No normalization: 'a' (U+0061) != 'á' (U+00E1) even case-insensitively.
+    assert!(!match_segment(&[Token::Literal(0x0061)], &[0x00E1], CI));
+}
+
+#[test]
+fn case_insensitive_identity_above_bmp() {
+    // Supplementary code points fold to themselves (identity).
+    assert!(match_segment(&[Token::Literal(0x1F600)], &[0x1F600], CI));
+    assert!(!match_segment(&[Token::Literal(0x1F600)], &[0x1F601], CI));
 }
 
 #[test]

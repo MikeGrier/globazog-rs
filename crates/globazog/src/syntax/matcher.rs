@@ -1,20 +1,25 @@
 // Copyright (c) 2026 Mike Grier
 
 //! Matching in 32-bit code-point space (D-46): single-segment token matching with
-//! `*` / `?` / n-ary alternation (D-44), cross-segment `**` (D-24), and ASCII-level
-//! case folding (D-28; full Unicode simple folding is tracked in CHECKLIST.md M2-6).
+//! `*` / `?` / n-ary alternation (D-44), cross-segment `**` (D-24), and Windows
+//! ordinal uppercase-table case folding (D-28).
 
 use crate::syntax::{CaseSensitivity, CodePoint, PatternSegment, Segment, Token};
 
 #[cfg(test)]
 mod tests;
 
-/// Fold a code point for case-insensitive comparison. ASCII `A`–`Z` fold to
-/// lowercase; all other code points (including surrogate-escaped values) are
-/// returned unchanged (D-28, interim ASCII fold — see M2-6).
+/// Fold a code point for case-insensitive comparison by uppercasing it via the
+/// Windows OS uppercase table (D-28), matching `CompareStringOrdinal(bIgnoreCase)`.
+/// Only BMP code points map; surrogate / supplementary / escaped values fold to
+/// themselves.
 fn fold(cp: CodePoint) -> CodePoint {
-    if (0x41..=0x5A).contains(&cp) {
-        cp + 0x20
+    if cp <= 0xFFFF {
+        let unit = cp as u16;
+        match super::upcase::UPCASE.binary_search_by_key(&unit, |&(from, _)| from) {
+            Ok(i) => super::upcase::UPCASE[i].1 as CodePoint,
+            Err(_) => cp,
+        }
     } else {
         cp
     }
