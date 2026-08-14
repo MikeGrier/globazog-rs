@@ -1,9 +1,8 @@
-# Copyright (c) {{license_year}} {{author_name}}
+# Copyright (c) 2026 Mike Grier
 
 [package]
-name          = "{{core_crate_name}}"
-description   = "{{project_description}}"
-readme        = "README.md"
+name        = "globazog"
+description = "A high-performance, Windows-first globbing and directory-traversal library for Rust."
 version.workspace       = true
 authors.workspace       = true
 edition.workspace       = true
@@ -12,6 +11,8 @@ license.workspace       = true
 repository.workspace    = true
 homepage.workspace      = true
 documentation.workspace = true
+keywords    = ["glob", "globbing", "filesystem", "directory", "traversal"]
+categories  = ["filesystem"]
 
 [dependencies]
 
