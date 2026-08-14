@@ -38,8 +38,9 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
   `#[non_exhaustive]`) + `EntryError` (per-entry stream item, D-53), via `thiserror`.
   Container linkage attached when ring item types land (D-64).
 
-- [ ] **M1-5. Skeleton green**: crate builds debug+release with zero warnings; one
-  trivial passing test wired into CI.
+- [x] **M1-5. Skeleton green**: crate builds debug+release with zero warnings;
+  `tests/smoke.rs` passes (crate links + `Error` displays), picked up by CI
+  `cargo test`.
 
 - [ ] **M1-6. Add crates.io publish workflow.** A job (or `publish-crate.yml`)
   triggered on the release-please `release_created` / `v*` tag running
