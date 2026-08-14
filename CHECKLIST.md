@@ -24,7 +24,7 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
   `cargo-generate.toml` / `scripts/post-script.rhai` / `README.template.md` /
   extension workflows removed, minimal buildable `globazog` crate created.
 
-- [ ] **M1-2. Module skeleton** in the core crate: `sys`, `syntax` (dialects + IR +
+- [x] **M1-2. Module skeleton** in the core crate: `sys`, `syntax` (dialects + IR +
   matcher), `predicate`, `ring`, `engine`, `builder`, `error` — each a stub that
   compiles. Copyright header on every source file (repo rule).
 
