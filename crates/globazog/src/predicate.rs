@@ -71,7 +71,7 @@ impl Cmp {
 bitflags! {
     /// Stat-tier metadata fields a predicate references, driving the engine's lazy
     /// fetch (D-62). Name and depth are always available and are not tracked here.
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct MetaMask: u16 {
         /// File size.
         const SIZE    = 1 << 0;

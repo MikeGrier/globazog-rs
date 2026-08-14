@@ -163,25 +163,36 @@ native Linux backend is blocked on a Linux test environment (this host is Window
 
 ## M6 — Ring & API surface
 
-- [ ] **M6-1. CQ ring** (D-68, D-63): `crossbeam_queue::ArrayQueue` of owned
-  `CqItem` (native inline name blob ≤512B); over-cap spill mechanism (D-63,
-  resolve here).
+- [x] **M6-1. CQ ring** (D-68, D-63): `crossbeam_queue::ArrayQueue` of owned
+  `CqItem`; owned code-point name blob (D-69). The fixed 512-byte inline blob and
+  over-cap spill are deferred to M∞-1 (gated on the inline-buffer optimization,
+  D-69) — the current owned-`Vec` name has no fixed cap, so spill is moot until
+  then.
 
-- [ ] **M6-2. Backpressure + signaling wrapper** (D-11, D-60): full →
-  park-continuation, drain → wake via `TP_WORK`; empty→non-empty coalesced signal;
-  waitable-handle + non-blocking `drain()` + servicing adapters.
+- [x] **M6-2. Backpressure + signaling wrapper** (D-11, D-60): full →
+  park-continuation (`try_push` hands the item back), empty→non-empty coalesced
+  signal, non-blocking `drain()` + `wait_pop`/`wait_nonempty` servicing surface.
+  `TP_WORK`-driven wake and the raw waitable OS handle are native follow-ups with
+  M7 (D-69).
 
-- [ ] **M6-3. SQ + CQ item types** (D-66, D-64, D-58, D-61): `SubmitQuery` /
+- [x] **M6-3. SQ + CQ item types** (D-66, D-64, D-58, D-61): `SubmitQuery` /
   `Cancel` / `DecisionAnswer`; CQ enum `Match` / `ContainerEnter` / `ContainerEnd`
-  / `Error` / `DecisionRequest` / `Terminal`; two monotonic id spaces.
+  / `Error` / `DecisionRequest` / `Terminal`; two monotonic id spaces (`IdSpace`).
 
-- [ ] **M6-4. Query builder → core query-def** (D-31–D-34, D-66): builder accepts
+- [x] **M6-4. Query builder → core query-def** (D-31–D-34, D-66): builder accepts
   absolute patterns / CWD base and lowers to roots + relative patterns; fallible
   `submit` compiles the pattern set.
 
-- [ ] **M6-5. Integration test**: ring ordering invariants (enter-before-children,
+- [x] **M6-5. Integration test**: ring ordering invariants (enter-before-children,
   nested ends — D-64), bounded no-drop backpressure, cancellation terminal marker
   FIFO ordering (D-61).
+
+- [ ] **M∞-1. Zero-copy inline name blob + over-cap spill** (D-63, D-68, D-69):
+  replace the owned code-point `Vec` name with a fixed inline native-unit buffer in
+  a 512-byte descriptor slot, add the borrowed / lending-cursor read path, and
+  implement the pathological over-cap spill (spill-to-side or error item).
+  **Gated on** profiling showing the owned-copy cost matters (D-68/D-69), not on a
+  missing consumer.
 
 ## M7 — Engine (the scheduler)
 

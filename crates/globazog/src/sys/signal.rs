@@ -13,7 +13,7 @@ mod tests;
 /// A coalesced binary signal. Multiple [`notify`](Signal::notify)s before a
 /// [`wait`](Signal::wait) collapse into one (no signal storm), matching D-60's
 /// empty→non-empty coalescing.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Signal {
     set: Mutex<bool>,
     cv: Condvar,

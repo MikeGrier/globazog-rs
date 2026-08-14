@@ -471,6 +471,30 @@ escaping that follows.
   client wanting discard simply stops draining and drops. **Dropping the query
   handle** is the RAII convenience (submit-cancel + block on the terminal marker
   in `Drop`), giving async teardown a real join point. (Resolves O-D.)
+- **D-69. Ring implementation choices (M6).** The ring/API surface is realized with
+  three v1 simplifications, each an owned decision (not a delegation) with a named
+  reason and a deferral gated on a real factor, not on "no consumer":
+  - **Name blob = reversible code-point form, not raw native units.** A `Match` /
+    `ContainerEnter` / `DecisionRequest` carries the entry name as the crate's
+    decoded code-point sequence (D-46), because the entire matcher pipeline and
+    `DirEntry` already operate in code-point space and the transform is lossless —
+    this *is* D-63's "one representation, two readers", just realized as the decoded
+    form rather than the native `[u16]`/`[u8]`. The true zero-copy native blob in a
+    512-byte inline descriptor (D-68) is deferred behind profiling, not lack of
+    need.
+  - **`PatternMask` is word-growable, not a fixed `u64`.** A `Match` bitset is a
+    `Box<[u64]>` sized to the query's pattern count, so a query is never silently
+    capped at 64 patterns (D-40). Owned items already heap-allocate their name
+    (D-68), so the extra allocation is consistent; a fixed-inline bitset is a later
+    optimization.
+  - **Waitable primitive = portable `Signal` (Condvar), raw OS handle deferred.**
+    Ring readiness and producer backpressure use the portable [`sys::signal::Signal`]
+    (D-60), mirroring the portable-first enumeration backend. The raw
+    `HANDLE`/`RawFd` exposure for foreign reactors is a native follow-up, blocked on
+    the same native-servicing work as the async engine (M7), not on a missing
+    consumer. `push_blocking` is documented as single-producer/test-suited; the
+    engine uses `try_push` + its own unified suspension (D-59) for multi-producer
+    backpressure.
 
 ---
 
