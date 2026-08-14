@@ -107,18 +107,23 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
 
 ## M4 — Predicates
 
-- [ ] **M4-1. Leaf vocabulary** (D-56, D-66): `name` (exact / seg-glob / substring
-  / extension / `∈ set`), `entry-type`, `reparse` (bool+tag), `attr-bitmask`,
-  `size`, `timestamps`, `depth` — each a **signed** leaf.
+- [x] **M4-1. Leaf vocabulary** (D-56, D-66): `predicate::Leaf` — `Name`
+  (exact / glob / contains / extension via `name_*` ctors) + `NameInSet`,
+  `IsType`, `IsReparse` / `ReparseTag`, `AttrsAllSet` / `AttrsAllClear`, `Size`,
+  `Time`, `Depth`; signed via `negate` / `Cmp`. `EntryMeta` is the metadata view.
 
-- [ ] **M4-2. Evaluation**: flat `Vec<Leaf>` conjunction (D-67); emit per-pattern,
-  descend per-query, composed with the glob set (D-66).
+- [x] **M4-2. Evaluation**: `eval_leaf` / `eval_all` — flat conjunction (D-67),
+  empty = vacuously true. Name leaves reuse `match_segment` (M2) for case rules.
+  Per-pattern emit / per-query descend placement + composition with the glob set
+  land in the query-def (M6) and engine (M7); this milestone is the evaluator.
 
-- [ ] **M4-3. Lazy metadata fetch-mask** (D-62): compute the union of referenced
-  stat-tier fields across all emit lists ∪ descend ∪ `result_shape`.
+- [x] **M4-3. Lazy metadata fetch-mask** (D-62): `MetaMask` bitflags +
+  `required_fields` union across a conjunction; name/depth need no fetch. The
+  engine unions emit ∪ descend ∪ `result_shape` (M6/M7).
 
-- [ ] **M4-4. Tests**: ≥10 normal + edge cases over mock metadata; the
-  `**/*.log`>10MB + `**/*.conf` per-pattern-emit example (D-66).
+- [x] **M4-4. Tests** (`predicate/tests.rs`): 11 tests over mock `EntryMeta`
+  covering every leaf, negation, conjunction, the fetch-mask, and the D-66
+  `**/*.log`>10 MiB vs `**/*.conf` per-pattern-emit example.
 
 ## M5 — Platform `sys` layer (safe wrappers over unsafe)
 
