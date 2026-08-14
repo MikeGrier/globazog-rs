@@ -13,7 +13,7 @@ pub mod signal;
 pub mod win;
 
 use crate::predicate::{EntryMeta, EntryType};
-use crate::syntax::{decode, CodePoint};
+use crate::syntax::{CodePoint, decode};
 use std::fs;
 use std::io;
 use std::path::Path;

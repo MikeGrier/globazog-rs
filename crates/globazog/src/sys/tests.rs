@@ -86,9 +86,11 @@ fn native_matches_portable_and_has_file_ids() {
     assert_eq!(nn.len(), 5);
 
     // The native backend supplies real file ids (D-51).
-    assert!(native
-        .iter()
-        .all(|e| e.file_id.volume != 0 || e.file_id.id != 0));
+    assert!(
+        native
+            .iter()
+            .all(|e| e.file_id.volume != 0 || e.file_id.id != 0)
+    );
 
     // Native file sizes are read inline (D-13).
     let files = enumerate_dir_native(&root.path().join("dir0")).unwrap();

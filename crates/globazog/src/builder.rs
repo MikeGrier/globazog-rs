@@ -12,11 +12,11 @@
 //! no process-global state (D-32); the caller supplies roots and any base.
 
 use crate::error::Error;
-use crate::predicate::{required_fields, Leaf, MetaMask};
+use crate::predicate::{Leaf, MetaMask, required_fields};
 use crate::ring::{CompletionRing, Decision, DecisionToken, SqOp, SubmissionQueue};
 use crate::syntax::anchor::literal_of;
 use crate::syntax::dialect::Dialect;
-use crate::syntax::parse::{parse, Anchor};
+use crate::syntax::parse::{Anchor, parse};
 use crate::syntax::set::CompiledPattern;
 use crate::syntax::{CaseSensitivity, CodePoint, Pattern, PatternSegment};
 use std::path::PathBuf;

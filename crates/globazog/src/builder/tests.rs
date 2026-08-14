@@ -2,9 +2,9 @@
 
 use super::*;
 use crate::predicate::{Leaf, MetaMask};
+use crate::syntax::CaseSensitivity;
 use crate::syntax::dialect::Dialect;
 use crate::syntax::parse::Anchor;
-use crate::syntax::CaseSensitivity;
 
 fn empty_emit() -> Vec<Leaf> {
     Vec::new()

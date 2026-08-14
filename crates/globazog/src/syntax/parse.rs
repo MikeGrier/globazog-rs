@@ -38,13 +38,13 @@ pub struct ParsedPattern {
 
 /// Parse `input` in `dialect` into the segment IR (D-18).
 pub fn parse(input: &str, dialect: Dialect) -> Result<ParsedPattern, Error> {
-    if matches!(dialect.alphabet(), Alphabet::Ascii) {
-        if let Some(c) = input.chars().find(|&c| c as u32 > 0x7F) {
-            return Err(Error::Pattern(format!(
-                "non-ASCII character {c:?} in ASCII dialect `{}`",
-                dialect.id()
-            )));
-        }
+    if matches!(dialect.alphabet(), Alphabet::Ascii)
+        && let Some(c) = input.chars().find(|&c| c as u32 > 0x7F)
+    {
+        return Err(Error::Pattern(format!(
+            "non-ASCII character {c:?} in ASCII dialect `{}`",
+            dialect.id()
+        )));
     }
 
     let chars: Vec<char> = input.chars().collect();
@@ -241,7 +241,7 @@ fn parse_brace(seg: &[char], mut i: usize, dialect: Dialect) -> Result<(Token, u
             '{' => {
                 return Err(Error::Pattern(
                     "nested `{}` alternation is unsupported".into(),
-                ))
+                ));
             }
             '*' => {
                 cur.push(Token::Star);

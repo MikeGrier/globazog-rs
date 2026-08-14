@@ -18,15 +18,14 @@ pub fn decode_utf16(units: &[u16]) -> Vec<CodePoint> {
     while i < units.len() {
         let u = units[i];
         // A high surrogate followed by a low surrogate forms a supplementary char.
-        if (0xD800..=0xDBFF).contains(&u) {
-            if let Some(&lo) = units.get(i + 1) {
-                if (0xDC00..=0xDFFF).contains(&lo) {
-                    let cp = 0x1_0000 + (((u as u32) - 0xD800) << 10) + ((lo as u32) - 0xDC00);
-                    out.push(cp);
-                    i += 2;
-                    continue;
-                }
-            }
+        if (0xD800..=0xDBFF).contains(&u)
+            && let Some(&lo) = units.get(i + 1)
+            && (0xDC00..=0xDFFF).contains(&lo)
+        {
+            let cp = 0x1_0000 + (((u as u32) - 0xD800) << 10) + ((lo as u32) - 0xDC00);
+            out.push(cp);
+            i += 2;
+            continue;
         }
         // BMP scalar, or an unpaired surrogate preserved by its raw value.
         out.push(u as u32);

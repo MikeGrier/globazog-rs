@@ -28,8 +28,8 @@ use crate::sys::signal::Signal;
 use crossbeam_queue::ArrayQueue;
 use std::collections::VecDeque;
 use std::num::NonZeroU64;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(test)]
 mod tests;

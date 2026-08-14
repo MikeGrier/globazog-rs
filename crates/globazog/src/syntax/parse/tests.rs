@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Mike Grier
 
 use crate::syntax::dialect::Dialect;
-use crate::syntax::parse::{parse, Anchor};
+use crate::syntax::parse::{Anchor, parse};
 use crate::syntax::{PatternSegment, Token};
 
 fn l(c: char) -> Token {

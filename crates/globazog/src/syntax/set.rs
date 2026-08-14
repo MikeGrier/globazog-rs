@@ -9,7 +9,7 @@
 use crate::error::Error;
 use crate::syntax::dialect::Dialect;
 use crate::syntax::matcher::{match_path, match_segment};
-use crate::syntax::parse::{parse, Anchor};
+use crate::syntax::parse::{Anchor, parse};
 use crate::syntax::{CaseSensitivity, CodePoint, Pattern, PatternSegment};
 
 #[cfg(test)]

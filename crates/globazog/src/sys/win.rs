@@ -17,12 +17,11 @@ use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 
-use windows_sys::Win32::Foundation::{GetLastError, ERROR_NO_MORE_FILES, HANDLE};
+use windows_sys::Win32::Foundation::{ERROR_NO_MORE_FILES, GetLastError, HANDLE};
 use windows_sys::Win32::Storage::FileSystem::{
-    FileIdExtdDirectoryInfo, FileIdExtdDirectoryRestartInfo, FileIdInfo,
-    GetFileInformationByHandleEx, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
-    FILE_FLAG_BACKUP_SEMANTICS, FILE_ID_128, FILE_ID_EXTD_DIR_INFO, FILE_ID_INFO,
-    FILE_LIST_DIRECTORY,
+    FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS,
+    FILE_ID_128, FILE_ID_EXTD_DIR_INFO, FILE_ID_INFO, FILE_LIST_DIRECTORY, FileIdExtdDirectoryInfo,
+    FileIdExtdDirectoryRestartInfo, FileIdInfo, GetFileInformationByHandleEx,
 };
 
 /// 100-ns intervals between the Windows (1601) and Unix (1970) epochs.

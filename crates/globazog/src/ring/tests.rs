@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::predicate::EntryType;
-use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use std::thread;
 
 fn cid(n: u64) -> ContainerId {
