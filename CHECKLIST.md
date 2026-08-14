@@ -42,10 +42,10 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
   `tests/smoke.rs` passes (crate links + `Error` displays), picked up by CI
   `cargo test`.
 
-- [ ] **M1-6. Add crates.io publish workflow.** A job (or `publish-crate.yml`)
-  triggered on the release-please `release_created` / `v*` tag running
-  `cargo publish -p globazog`; requires a `CARGO_REGISTRY_TOKEN` repository secret
-  (owner to set). Marketplace publishing intentionally omitted.
+- [x] **M1-6. Add crates.io publish workflow.** `.github/workflows/publish-crate.yml`
+  triggers on the release-please `v*` tag and runs `cargo publish -p globazog --locked`;
+  requires a `CARGO_REGISTRY_TOKEN` repository secret (**owner to set** before the
+  first release). Marketplace publishing intentionally omitted.
 
 ## M2 — Glob matcher core (portable, no I/O)
 

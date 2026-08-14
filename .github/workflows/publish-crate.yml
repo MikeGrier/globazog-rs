@@ -1,0 +1,33 @@
+# Copyright (c) 2026 Mike Grier
+name: publish-crate
+
+# Publishes `globazog` to crates.io when release-please creates a `v*` tag on
+# merge of the Release PR. The tag is created using the RELEASE_PLEASE_TOKEN PAT
+# (not GITHUB_TOKEN), so this `push: tags` event fires normally.
+#
+# Requires a `CARGO_REGISTRY_TOKEN` repository secret with publish rights
+# (owner to set before the first release).
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  publish:
+    name: cargo publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p globazog --locked
