@@ -28,9 +28,11 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
   matcher), `predicate`, `ring`, `engine`, `builder`, `error` — each a stub that
   compiles. Copyright header on every source file (repo rule).
 
-- [ ] **M1-3. Workspace dependencies**: `crossbeam-queue` (D-68), `bitflags`
-  (attr/field masks), platform crates (`windows`/`windows-sys` for Win; `rustix`
-  or `libc` for Linux), and dev-deps for test fixtures. No unused deps.
+- [x] **M1-3. Workspace dependencies**: `crossbeam-queue` (D-68), `bitflags`
+  (attr/field masks), `thiserror` (error taxonomy, M1-4); `windows-sys`
+  (`cfg(windows)`) and `rustix` (`cfg(target_os = "linux")`) for the enumeration
+  backends (D-54). Wired ahead of use (M2–M7); test-fixture dev-deps added when
+  fixtures land.
 
 - [ ] **M1-4. Error taxonomy** (`error` module): the crate error type + per-entry
   error item shape (D-53). Named enums/consts for any tags (repo no-magic-numbers
