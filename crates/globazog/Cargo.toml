@@ -29,3 +29,4 @@ windows-sys = { version = "0.60", features = ["Win32_Foundation"] }
 rustix = { version = "1", features = ["fs"] }
 
 [dev-dependencies]
+tempfile = "3"

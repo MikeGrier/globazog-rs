@@ -11,6 +11,6 @@ pub mod error;
 pub mod predicate;
 pub mod ring;
 pub mod syntax;
+pub mod sys;
 
 mod engine;
-mod sys;

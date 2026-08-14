@@ -125,28 +125,41 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
   covering every leaf, negation, conjunction, the fetch-mask, and the D-66
   `**/*.log`>10 MiB vs `**/*.conf` per-pattern-emit example.
 
-## M5 — Platform `sys` layer (safe wrappers over unsafe)
+## M5 — Platform `sys` layer
 
-- [ ] **M5-1. Completion-based enumeration abstraction** (D-5, D-6): the trait a
-  backend implements ("deliver next batch for this scan-state via a completion")
-  + the scan-state object.
+**Re-planned during execution.** M5 starts with a **portable, safe `std::fs`
+backend** that produces entries + metadata and unblocks the ring/engine (M6/M7),
+plus the waitable primitive. The **native OS backends** and the **async
+IOCP/threadpool orchestration** are sequenced as explicit follow-ups: the async
+park/resume is the M7 scheduler's unified continuation mechanism (D-59), and the
+native Linux backend is blocked on a Linux test environment (this host is Windows).
 
-- [ ] **M5-2. Windows backend** (D-4, D-9, D-13): relative `NtCreateFile`,
-  overlapped `NtQueryDirectoryFile` (inline attrs + reparse tag via
-  `FILE_ID_EXTD_DIR_INFORMATION`), `CreateThreadpoolIo`/`TP_IO`, IOCP,
-  `FILE_ID_INFO` for cycle keys (D-51).
+- [x] **M5-1. Enumeration primitive + metadata** (D-13, D-54): `sys::DirEntry` /
+  `FileId` / `DirEntry::meta()` → `EntryMeta`, and `sys::enumerate_dir` — portable
+  `std::fs`, symlink-aware, extracting type / reparse / size / times / attrs and
+  file-id where the platform exposes them cheaply (Unix `dev`/`ino`).
 
-- [ ] **M5-3. Linux backend** (D-6, D-9): `openat`, blocking `getdents64` on a pool
-  thread, `statx`; io_uring for `openat`/`statx` where available; `(st_dev,
-  st_ino)` cycle keys (D-51).
+- [x] **M5-2. Waitable primitive** (D-60): `sys::signal::Signal` — a coalesced
+  binary signal for ring-readiness / backpressure wakeups. (Raw OS-handle exposure
+  — Windows event / Linux eventfd — for foreign reactors is a native follow-up.)
 
-- [ ] **M5-4. Threadpool-work + waitable primitives**: `TP_WORK` wrapper (D-4) and
-  the waitable-handle abstraction (Windows event / Linux eventfd, coalesced) for
-  D-60.
+- [x] **M5-3. In-crate enumeration + signal tests**: a ~210-entry temp tree
+  (`tempfile`) enumerated with metadata assertions, plus signal coalescing /
+  cross-thread wakeup. 5 tests.
 
-- [ ] **M5-5. Integration test**: enumerate a large generated tree on the host OS;
-  verify inline metadata, reparse detection, and correct handling of long / non-
-  UTF-8 names (D-30, D-46).
+- [ ] **M5-4. Native Windows backend** (D-4, D-9, D-13, D-30): relative
+  `NtCreateFile` + `NtQueryDirectoryFile` (`FILE_ID_EXTD_DIR_INFORMATION`: inline
+  attrs, reparse tag, 128-bit file id), NT-layer long/`\?\` paths. Testable on this
+  Windows host; slots in behind the M5-1 contract.
+
+- [ ] **M5-5. Native Linux backend** (D-6, D-9): `openat` + `getdents64` + `statx`
+  (io_uring where available), `(st_dev, st_ino)` file ids.
+  **BLOCKER:** no Linux test environment on this Windows host — the FFI cannot be
+  validated locally. Gated on a Linux dev/CI-iteration environment.
+
+- [ ] **M5-6. Async orchestration → M7** (D-4, D-59): overlapped enumeration +
+  IOCP + `CreateThreadpoolIo` (`TP_IO`) + `TP_WORK`. Built with the M7 scheduler,
+  since the async park/resume is its unified continuation mechanism (D-59).
 
 ## M6 — Ring & API surface
 
