@@ -34,9 +34,9 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
   backends (D-54). Wired ahead of use (M2–M7); test-fixture dev-deps added when
   fixtures land.
 
-- [ ] **M1-4. Error taxonomy** (`error` module): the crate error type + per-entry
-  error item shape (D-53). Named enums/consts for any tags (repo no-magic-numbers
-  rule).
+- [x] **M1-4. Error taxonomy** (`error` module): `Error` (fatal: `Pattern`, `Io`;
+  `#[non_exhaustive]`) + `EntryError` (per-entry stream item, D-53), via `thiserror`.
+  Container linkage attached when ring item types land (D-64).
 
 - [ ] **M1-5. Skeleton green**: crate builds debug+release with zero warnings; one
   trivial passing test wired into CI.
