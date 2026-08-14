@@ -10,8 +10,11 @@
 
 pub mod anchor;
 pub mod decode;
+pub mod dialect;
 pub mod matcher;
+pub mod parse;
 pub mod path;
+pub mod set;
 
 mod upcase;
 

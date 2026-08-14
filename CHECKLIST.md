@@ -81,23 +81,29 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
 
 ## M3 — Dialects & pattern-set
 
-- [ ] **M3-1. Dialect registry** (D-15, D-16, D-17, D-20): enum + ASCII id +
-  alphabet flag (ASCII rejects >127); `@`-versioning with partial-version binding
-  and resolve-to-concrete.
+- [x] **M3-1. Dialect registry** (D-15–D-20): `syntax::dialect` — `Dialect`
+  (`Posix`/`Win`), `id()`, `Alphabet` flag, `default_case()`, `is_supported()`
+  platform gate (D-47), and `resolve()` with `@`-partial-version binding. 4 tests.
 
-- [ ] **M3-2. `posix` front-end** (D-21): `/`-only separators, `\` POSIX escape,
-  UTF-8, default case-sensitive. Lowers to the IR.
+- [x] **M3-2. `posix` front-end** (D-21): `syntax::parse` — `/`-only separators,
+  `\` escape, UTF-8, `.`-strip / `..`-reject (D-26), `**` whole-segment (D-24),
+  brace alternation (D-44), anchor detection. Lowers to the IR.
 
-- [ ] **M3-3. `win` front-end** (D-22, D-45, D-47): `/`+`\` separators, brace-
-  doubling escape (`{{`/`}}`), UNC leading-`\\` anchor (D-25), Windows-only gate,
-  default case-insensitive. Document brace escaping prominently.
+- [x] **M3-3. `win` front-end** (D-22, D-45): `/`+`\` separators, `{{`/`}}`
+  brace-doubling escape, `Drive` / `Unc` (leading `\`) / `Root` anchors (D-25).
+  The Windows-only policy gate (D-47) is `Dialect::is_supported()`, applied by the
+  engine/builder so parse/match stay portable and testable. ~20 parser tests.
 
-- [ ] **M3-4. Pattern-set compilation** (D-36–D-39): anchor merge/fork,
-  per-directory live-set, matched-pattern bitset (D-40); mixed dialects in one set
-  (D-41).
+- [x] **M3-4. Pattern-set** (D-36–D-41): `syntax::set::PatternSet` — `add`
+  (per-pattern case/dialect), `matches` → matched-pattern indices (D-40; bitset
+  materialized at the ring, M6), and `should_descend` = the union descend decision
+  (D-39) via a sound mid-pattern viability walk (D-34). Mixed dialects (D-41).
+  Anchor merge/fork for traversal seeding is engine work (M6/M7). 4 tests.
 
-- [ ] **M3-5. Integration test**: parse + match both dialects over a large
-  generated name corpus; verify anchors, `**`, braces, case, UNC, non-UTF-8 names.
+- [x] **M3-5. Integration test** (`tests/dialects.rs`): parse + match `posix` and
+  `win` over a 1,200-path corpus — verifies `**`, braces, case-insensitive `win`,
+  anchors, and descend pruning. (Non-UTF-8 name matching is covered by the M2
+  decode tests; exercised end-to-end in M8.)
 
 ## M4 — Predicates
 
