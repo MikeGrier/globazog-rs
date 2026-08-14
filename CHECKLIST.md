@@ -49,24 +49,33 @@ counters (O-D′ / D-50), exact `sys` wrapper surface (O-E / D-54).
 
 ## M2 — Glob matcher core (portable, no I/O)
 
-- [ ] **M2-1. char32 reversible decode** (D-46): WTF-8 surrogate preservation
-  (Windows `[u16]`) and PEP-383 surrogateescape (Linux `[u8]`) into a code-point
-  stream; never panics on ill-formed input. ≥10 normal + edge cases (unpaired
-  surrogates, invalid UTF-8, empty).
+- [x] **M2-1. char32 reversible decode** (D-46): `syntax::decode` — WTF-8 surrogate
+  preservation (`decode_utf16`), PEP-383 surrogateescape (`decode_bytes`), lossless
+  `decode_str`; never panics. 13 tests incl. unpaired surrogates, invalid/truncated
+  UTF-8, empty.
 
-- [ ] **M2-2. Segment-structured IR** (D-18): per-segment matcher over char32 —
-  literal / `*` / `?` / **n-ary** brace alternation (D-44, D-67); cross-segment
-  `**` with zero-match and whole-segment-only rule (D-24).
+- [x] **M2-2. Segment-structured IR** (D-18): `Token` (Literal / `?` / `*` / n-ary
+  `Alt`), `Segment`, `PatternSegment` (`Match` / `DoubleStar`), `Pattern`
+  (D-24, D-44, D-67).
 
-- [ ] **M2-3. Single-segment match engine** + simple Unicode case-fold (D-28) and
-  the case-sensitivity option (D-23). ≥10 normal + edge cases.
+- [x] **M2-3. Single- + cross-segment matcher** (D-46): `match_segment`
+  (backtracking; `*` / `?` / alternation) and `match_path` (`**` zero-or-more,
+  whole-segment) with the `CaseSensitivity` option (D-23). Case fold is **interim
+  ASCII** (D-28) — full Unicode simple fold is M2-6. 17 tests.
 
-- [ ] **M2-4. Path-structure handling** (D-25, D-26): separator/segment split,
-  consecutive-separator collapse (with UNC-anchor exception hook), `.` strip /
-  `..` reject, `.`/`..` enumeration-entry skip.
+- [x] **M2-4. Path-structure primitives** (D-25, D-26): `syntax::path` —
+  `split_segments` (collapses consecutive separators; UNC hook left to `win`, M3)
+  and `is_dot` / `is_dotdot`. Application (`.`-strip / `..`-reject in pattern
+  parsing, `.`/`..` enumeration skip) is wired in M3 / M7. 7 tests.
 
-- [ ] **M2-5. Literal-prefix / anchor extraction** (D-37) for a single pattern;
-  mid-pattern literal viability pruning (D-34). Unit tests.
+- [x] **M2-5. Literal-prefix / anchor extraction** (D-37): `syntax::anchor` —
+  `literal_of` (segment → literal, for mid-pattern pruning D-34) and
+  `literal_prefix` (leading literal seek target). 5 tests.
+
+- [ ] **M2-6. Full Unicode simple case folding** (D-28). Replace the interim ASCII
+  fold in `syntax::matcher` with Unicode *simple* case folding (needs a fold data
+  table or a crate such as `caseless` / `unicode-case-mapping`). **Gated on a
+  dependency / data-source decision** — flagged to owner.
 
 ## M3 — Dialects & pattern-set
 
