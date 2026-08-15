@@ -29,8 +29,10 @@ use windows_sys::Win32::Storage::FileSystem::{
 const FILETIME_TO_UNIX_100NS: i64 = 116_444_736_000_000_000;
 
 /// Enumerate one directory natively, returning entries with full inline metadata.
-/// The listing is inline, so there are no per-entry metadata failures to collect
-/// ([`DirScan::entry_errors`] is always empty).
+/// The listing is inline, so there are no per-entry stat failures; the only entry
+/// error possible is a late `GetFileInformationByHandleEx` read error after one or
+/// more successful batches, which is surfaced in [`DirScan::entry_errors`] while the
+/// already-collected entries are preserved (D-53).
 pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
     let dir = open_dir(path)?;
     let raw = dir.as_raw_handle() as HANDLE;
@@ -43,6 +45,7 @@ pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
     let cap = (buf.len() * size_of::<u64>()) as u32;
 
     let mut out = Vec::new();
+    let mut entry_errors = Vec::new();
     let mut first = true;
     loop {
         let class = if first {
@@ -59,7 +62,15 @@ pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
             if err == ERROR_NO_MORE_FILES {
                 break;
             }
-            return Err(io::Error::from_raw_os_error(err as i32));
+            let io_err = io::Error::from_raw_os_error(err as i32);
+            // A read error after one or more successful batches: keep the usable
+            // partial listing and surface the late error; only a failure with no
+            // usable listing propagates as the outer `Err` (D-53).
+            if out.is_empty() {
+                return Err(io_err);
+            }
+            entry_errors.push(io_err);
+            break;
         }
         first = false;
 
@@ -88,7 +99,7 @@ pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
     }
     Ok(DirScan {
         entries: out,
-        entry_errors: Vec::new(),
+        entry_errors,
     })
 }
 

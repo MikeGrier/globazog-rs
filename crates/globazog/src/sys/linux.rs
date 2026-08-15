@@ -21,9 +21,10 @@ use std::io;
 use std::path::Path;
 
 /// Enumerate one directory natively, returning entries with full stat metadata. A
-/// per-entry `statx` failure (e.g. an entry removed between `getdents64` and `statx`)
-/// is collected into [`DirScan::entry_errors`] rather than aborting the directory
-/// (D-53).
+/// per-entry `statx` failure (e.g. an entry removed between `getdents64` and `statx`),
+/// or a late `getdents64` read error after some names were already read, is collected
+/// into [`DirScan::entry_errors`] rather than aborting the directory (D-53). The outer
+/// `Err` is reserved for a failure that yields no usable listing at all.
 pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
     let dirfd = fs::open(
         path,
@@ -33,9 +34,22 @@ pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
 
     // Read all names first (getdents advances the fd offset); statx afterwards.
     let mut names: Vec<std::ffi::CString> = Vec::new();
+    let mut entry_errors = Vec::new();
     let dir = Dir::read_from(&dirfd)?;
     for entry in dir {
-        let entry = entry?;
+        let entry = match entry {
+            Ok(e) => e,
+            Err(err) => {
+                // A read error after some names were read: keep the usable partial
+                // listing and surface the late error; only a listing with no names
+                // at all propagates as the outer `Err` (D-53).
+                if names.is_empty() {
+                    return Err(io::Error::from(err));
+                }
+                entry_errors.push(io::Error::from(err));
+                break;
+            }
+        };
         let name = entry.file_name();
         if is_dot_entry(name) {
             continue;
@@ -52,7 +66,6 @@ pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
         | StatxFlags::BTIME;
 
     let mut entries = Vec::with_capacity(names.len());
-    let mut entry_errors = Vec::new();
     for name in &names {
         match fs::statx(&dirfd, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW, mask) {
             Ok(st) => entries.push(make_entry(name, &st)),
