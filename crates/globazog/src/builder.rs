@@ -261,7 +261,8 @@ impl QueryBuilder {
                     (parsed.pattern, Anchor::Relative)
                 }
                 other => {
-                    let (root, relative) = lower_self_rooting(other, parsed.pattern, &self.base)?;
+                    let (root, relative) =
+                        lower_self_rooting(other, parsed.pattern, &self.base, pend.dialect)?;
                     intern_root(&mut roots, root);
                     (relative, other)
                 }
@@ -330,15 +331,27 @@ fn lower_self_rooting(
     anchor: Anchor,
     pattern: Pattern,
     base: &Option<PathBuf>,
+    dialect: Dialect,
 ) -> Result<(Root, Pattern), Error> {
     let mut root = match anchor {
         Anchor::Root => {
-            // A leading separator. On a base-less filesystem root this is `/`; on
-            // `win` the current drive is unknown without a base (never a global,
-            // D-32) — require one.
+            // A leading separator. With a base, root at the base's filesystem root.
+            // Without a base: a `win` leading separator is current-drive-relative
+            // (process-global state we refuse to read, D-32/D-35), so reject it; a
+            // posix `/` is an honest absolute root that needs none.
             match base {
                 Some(b) => root_of(b),
-                None => PathBuf::from(std::path::MAIN_SEPARATOR_STR),
+                None => {
+                    if dialect == Dialect::Win {
+                        return Err(Error::Pattern(
+                            "a leading-separator `win` pattern is current-drive-relative \
+                             and needs a per-drive base; supply one with `.base(...)` \
+                             (D-32)"
+                                .into(),
+                        ));
+                    }
+                    PathBuf::from(std::path::MAIN_SEPARATOR_STR)
+                }
             }
         }
         Anchor::Drive(c) => PathBuf::from(format!("{c}:\\")),
@@ -360,8 +373,14 @@ fn lower_self_rooting(
         rest_start = 2;
     }
 
-    // Peel further leading literal segments into the root (D-37).
-    while let Some(lit) = literal_segment(&segments, rest_start) {
+    // Peel leading literal segments into the root (D-37), but always leave at least
+    // one segment in the relative pattern: an all-literal absolute pattern like
+    // `/etc/hosts` must root at `/etc` and match `hosts`, not root at the file itself
+    // and try to enumerate it as a directory (which would never report the file).
+    while rest_start + 1 < segments.len() {
+        let Some(lit) = literal_segment(&segments, rest_start) else {
+            break;
+        };
         root.push(lit);
         rest_start += 1;
     }

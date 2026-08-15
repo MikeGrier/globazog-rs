@@ -64,6 +64,18 @@ fn posix_absolute_stops_peeling_at_first_wildcard() {
 }
 
 #[test]
+fn posix_absolute_all_literal_keeps_final_segment() {
+    let q = QueryBuilder::new()
+        .pattern("/etc/hosts", Dialect::Posix, empty_emit())
+        .build()
+        .unwrap();
+    // Root at the parent dir and keep the file name as the relative pattern, so the
+    // engine enumerates `/etc` and matches `hosts` instead of rooting at the file.
+    assert_eq!(q.roots, vec![Root::new("/etc")]);
+    assert_eq!(q.patterns[0].glob.pattern.segments.len(), 1);
+}
+
+#[test]
 fn case_override_applies() {
     let q = QueryBuilder::new()
         .root("/data")
@@ -136,6 +148,28 @@ fn win_drive_absolute_peels_into_drive_root() {
         .unwrap();
     assert_eq!(q.roots, vec![Root::new(r"C:\Users")]);
     assert_eq!(q.patterns[0].glob.anchor, Anchor::Drive('C'));
+}
+
+#[cfg(windows)]
+#[test]
+fn win_leading_separator_without_base_errors() {
+    // A leading-separator `win` pattern is current-drive-relative; without a base
+    // that is process-global state we refuse to read (D-32), so it must error.
+    let r = QueryBuilder::new()
+        .pattern(r"\foo\*.txt", Dialect::Win, empty_emit())
+        .build();
+    assert!(r.is_err());
+}
+
+#[cfg(windows)]
+#[test]
+fn win_leading_separator_with_base_roots_at_base_drive() {
+    let q = QueryBuilder::new()
+        .base(r"D:\work")
+        .pattern(r"\foo\*.txt", Dialect::Win, empty_emit())
+        .build()
+        .unwrap();
+    assert_eq!(q.roots, vec![Root::new(r"D:\foo")]);
 }
 
 #[cfg(not(windows))]
