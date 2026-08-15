@@ -58,8 +58,10 @@
 //!
 //! Full paths are not shipped per entry; reconstruct them client-side by keeping a
 //! `container id → (parent, name)` map from the [`ContainerEnter`] stream and
-//! walking to the root (a [`ContainerName::Root`] carries the root's index). For a
-//! flat listing you often only need [`Match::name`], as the example above shows.
+//! walking to the root (a [`ContainerName::Root`] carries the root's index, which
+//! [`QueryHandle::roots`] resolves to a path — including the internally derived root
+//! of a self-rooting pattern). For a flat listing you often only need
+//! [`Match::name`], as the example above shows.
 //!
 //! # Filtering, backpressure, and cancellation
 //!

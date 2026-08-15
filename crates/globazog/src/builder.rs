@@ -131,6 +131,7 @@ impl Query {
 pub struct QueryHandle {
     completions: Arc<CompletionRing>,
     submissions: Arc<SubmissionQueue>,
+    roots: Box<[PathBuf]>,
     // Drops last, cancelling and joining the engine threads (D-61).
     _engine: crate::engine::EngineHandle,
 }
@@ -144,6 +145,18 @@ impl QueryHandle {
     /// The submission queue for control ops (D-66).
     pub fn submissions(&self) -> &Arc<SubmissionQueue> {
         &self.submissions
+    }
+
+    /// The lowered physical roots, indexed by [`ContainerName::Root`](crate::ContainerName::Root).
+    ///
+    /// A [`ContainerEnter`](crate::ContainerEnter) for a root carries only its
+    /// index (to avoid inlining a long path, D-64); resolve it to a path via this
+    /// slice for full-path reconstruction. This is the *only* way to obtain a
+    /// self-rooting pattern's root, which is derived internally (D-38) rather than
+    /// supplied through [`root`](QueryBuilder::root), so the index is otherwise
+    /// unresolvable from a submitted handle.
+    pub fn roots(&self) -> &[PathBuf] {
+        &self.roots
     }
 
     /// Submit a cancel (D-61). Acknowledged by a terminal CQ marker that lands after
@@ -347,6 +360,7 @@ impl QueryBuilder {
     pub fn submit(self) -> Result<QueryHandle, Error> {
         let ring_capacity = self.options.ring_capacity;
         let query = self.build()?;
+        let roots: Box<[PathBuf]> = query.roots.iter().map(|r| r.path.clone()).collect();
         let completions = Arc::new(CompletionRing::with_capacity(ring_capacity));
         let submissions = Arc::new(SubmissionQueue::new());
         let engine =
@@ -354,6 +368,7 @@ impl QueryBuilder {
         Ok(QueryHandle {
             completions,
             submissions,
+            roots,
             _engine: engine,
         })
     }
