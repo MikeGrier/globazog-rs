@@ -216,6 +216,12 @@ fn tokenize(seg: &[char], dialect: Dialect) -> Result<Vec<Token>, Error> {
 
 /// Parse a brace alternation body starting just after `{`; returns the `Alt` token
 /// and the index just past the closing `}`. Nested braces are unsupported (D-44).
+///
+/// Limitation (D-45): `win`-dialect brace-doubling (`{{`/`}}`) is **not** honored
+/// inside an alternation arm — `{` is always the (rejected) start of a nested group
+/// and the first `}` always closes the alternation, so a literal brace cannot appear
+/// inside a brace group. Honoring it here is ambiguous with arm termination (`{a,b}}`
+/// could not close), so it is deliberately excluded.
 fn parse_brace(seg: &[char], mut i: usize, dialect: Dialect) -> Result<(Token, usize), Error> {
     let mut arms: Vec<Vec<Token>> = Vec::new();
     let mut cur: Vec<Token> = Vec::new();

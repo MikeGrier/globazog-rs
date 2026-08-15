@@ -193,7 +193,11 @@ escaping that follows.
   alternation (D-44), literal braces **always** require doubling:
   `report{final}.txt` matches `reportfinal.txt`, while `report{{final}}.txt`
   matches `report{final}.txt`. **The `win` dialect spec must document brace
-  escaping prominently.**
+  escaping prominently.** **Limitation:** brace-doubling is recognized only
+  *outside* a brace group; inside an alternation arm (`{…}`), `{{`/`}}` are **not**
+  honored — the first `}` closes the group and `{` is a rejected nested-group start —
+  because honoring them there is ambiguous with arm termination (`{a,b}}` could not
+  close). Literal braces inside an alternation arm are therefore unsupported in v1.
 - **D-24. `**` semantics.** Matches **zero-or-more** segments (`a/**/b` matches
   `a/b`); legal **only as a whole segment** (embedded `x**y` is an error); `a/**`
   matches `a` itself **and** everything beneath; `**/x` matches `x` at any depth

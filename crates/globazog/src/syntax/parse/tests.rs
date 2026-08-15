@@ -157,6 +157,14 @@ fn win_brace_doubling_is_literal() {
 }
 
 #[test]
+fn win_brace_doubling_not_honored_inside_alternation_arm() {
+    // Limitation (D-45): inside an alternation arm, `{{`/`}}` doubling is not
+    // recognized. `{` is the (rejected) start of a nested group and the first `}`
+    // closes the arm, so a literal brace cannot appear inside `{a,b}`.
+    assert!(parse("x{a,b{{c}", Dialect::Win).is_err());
+}
+
+#[test]
 fn win_brace_alternation_still_works() {
     assert_eq!(
         segments("*.{cpp,h}", Dialect::Win),
