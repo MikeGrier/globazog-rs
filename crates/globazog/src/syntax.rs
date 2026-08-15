@@ -28,7 +28,7 @@ pub type CodePoint = u32;
 pub enum CaseSensitivity {
     /// Exact code-point comparison.
     Sensitive,
-    /// Case-folded comparison (interim ASCII fold; see M2-6).
+    /// Case-folded comparison via the Windows ordinal uppercase table (D-28).
     Insensitive,
 }
 

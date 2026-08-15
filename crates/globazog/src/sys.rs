@@ -1,11 +1,13 @@
 // Copyright (c) 2026 Mike Grier
 
-//! Platform layer (D-54). The **completion-based enumeration abstraction** (D-5)
-//! and the native OS backends (Windows overlapped `NtQueryDirectoryFile` + IOCP,
-//! Linux `getdents64` / io_uring — D-4, D-6) are sequenced follow-ups (see
-//! CHECKLIST.md M5). This module currently provides the **portable reference
-//! backend** ([`enumerate_dir`], safe `std::fs`) that satisfies the enumeration
-//! contract and unblocks the ring/engine, plus the [`signal`] waitable primitive.
+//! Platform layer (D-54). [`enumerate`] dispatches to the native synchronous
+//! backend on Windows (`GetFileInformationByHandleEx` — D-4) and Linux
+//! (`getdents64` + `statx` — D-6), and falls back to the **portable reference
+//! backend** ([`enumerate_dir`], safe `std::fs`) on other platforms. This module
+//! also provides the [`signal`] waitable primitive. The completion-based
+//! enumeration abstraction (D-5) and the overlapped/async OS paths (Windows
+//! overlapped `NtQueryDirectoryFile` + IOCP, Linux io_uring) remain sequenced
+//! follow-ups (see CHECKLIST.md M7-6).
 
 pub mod signal;
 
