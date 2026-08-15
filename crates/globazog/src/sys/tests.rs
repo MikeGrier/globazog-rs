@@ -1,8 +1,35 @@
 // Copyright (c) 2026 Mike Grier
 
-use super::enumerate_dir;
+use super::{enumerate_dir, nanos};
 use crate::predicate::EntryType;
 use std::fs;
+use std::time::{Duration, UNIX_EPOCH};
+
+#[test]
+fn nanos_unavailable_is_zero() {
+    assert_eq!(nanos(Err(std::io::Error::other("x"))), 0);
+}
+
+#[test]
+fn nanos_pre_epoch_is_negative() {
+    let t = UNIX_EPOCH - Duration::from_secs(1);
+    assert_eq!(nanos(Ok(t)), -1_000_000_000);
+}
+
+#[test]
+fn nanos_post_epoch_is_positive() {
+    let t = UNIX_EPOCH + Duration::from_secs(1);
+    assert_eq!(nanos(Ok(t)), 1_000_000_000);
+}
+
+#[test]
+fn nanos_far_future_saturates_instead_of_wrapping() {
+    // 10^10 s ≈ year 2286: 10^19 ns exceeds i64::MAX (~9.22×10^18, ≈ year 2262), so
+    // it must saturate to i64::MAX rather than wrap. (A larger value would overflow
+    // the platform `SystemTime` itself on Windows, so this is the constructible edge.)
+    let t = UNIX_EPOCH + Duration::from_secs(10_000_000_000);
+    assert_eq!(nanos(Ok(t)), i64::MAX);
+}
 
 #[test]
 fn enumerate_temp_tree() {

@@ -49,7 +49,7 @@ pub fn parse(input: &str, dialect: Dialect) -> Result<ParsedPattern, Error> {
 
     let chars: Vec<char> = input.chars().collect();
     let mut i = 0usize;
-    let anchor = detect_anchor(&chars, &mut i, dialect);
+    let anchor = detect_anchor(&chars, &mut i, dialect)?;
 
     // Split the remainder into raw segments on unescaped separators (collapsing
     // consecutive separators per D-25).
@@ -102,13 +102,13 @@ fn is_sep(c: char, dialect: Dialect) -> bool {
     }
 }
 
-fn detect_anchor(chars: &[char], i: &mut usize, dialect: Dialect) -> Anchor {
+fn detect_anchor(chars: &[char], i: &mut usize, dialect: Dialect) -> Result<Anchor, Error> {
     let mut n = 0;
     while *i < chars.len() && is_sep(chars[*i], dialect) {
         n += 1;
         *i += 1;
     }
-    match dialect {
+    Ok(match dialect {
         Dialect::Posix => {
             if n > 0 {
                 Anchor::Root
@@ -126,6 +126,14 @@ fn detect_anchor(chars: &[char], i: &mut usize, dialect: Dialect) -> Anchor {
             {
                 let letter = chars[0].to_ascii_uppercase();
                 *i = 2;
+                // A drive designator with no following separator (`C:foo`) is
+                // drive-relative and rejected (D-33); only a separator-bearing
+                // drive root (`C:\foo`, or bare `C:`) self-roots at the drive.
+                if *i < chars.len() && !is_sep(chars[*i], dialect) {
+                    return Err(Error::Pattern(format!(
+                        "drive-relative path `{letter}:...` is not allowed; use an absolute drive path with a separator, or supply a per-drive base (D-33)"
+                    )));
+                }
                 while *i < chars.len() && is_sep(chars[*i], dialect) {
                     *i += 1;
                 }
@@ -134,7 +142,7 @@ fn detect_anchor(chars: &[char], i: &mut usize, dialect: Dialect) -> Anchor {
                 Anchor::Relative
             }
         }
-    }
+    })
 }
 
 /// Turn one raw segment into a `PatternSegment`, or `None` if it is a `.` to strip.
@@ -250,6 +258,13 @@ fn parse_brace(seg: &[char], mut i: usize, dialect: Dialect) -> Result<(Token, u
                 ));
             }
             '*' => {
+                // `**` is whole-segment-only (D-24); adjacent stars inside an
+                // alternation arm are never a whole segment, so reject them here.
+                if cur.last() == Some(&Token::Star) {
+                    return Err(Error::Pattern(
+                        "`**` is only allowed as a whole path segment".into(),
+                    ));
+                }
                 cur.push(Token::Star);
                 i += 1;
             }

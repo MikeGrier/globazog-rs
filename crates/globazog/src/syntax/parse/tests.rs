@@ -135,9 +135,27 @@ fn win_unc_anchor() {
 
 #[test]
 fn win_drive_anchor_uppercased() {
-    let p = parse("d:\\foo", Dialect::Win).unwrap();
+    let p = parse(r"d:\foo", Dialect::Win).unwrap();
     assert_eq!(p.anchor, Anchor::Drive('D'));
     assert_eq!(p.pattern.segments, vec![litseg("foo")]);
+}
+
+#[test]
+fn win_drive_relative_rejected() {
+    // `C:foo` is drive-relative (no separator after the colon) and must error per
+    // D-33 — it must not be silently rooted at `C:\` like `C:\foo`.
+    assert!(parse("C:foo", Dialect::Win).is_err());
+    assert!(parse(r"c:foo\bar", Dialect::Win).is_err());
+    // The separator-bearing drive root is still accepted.
+    assert!(parse(r"C:\foo", Dialect::Win).is_ok());
+    assert!(parse("C:/foo", Dialect::Win).is_ok());
+}
+
+#[test]
+fn adjacent_stars_in_alternation_arm_rejected() {
+    // `**` is whole-segment-only (D-24); it must not slip through inside an arm.
+    assert!(parse("{a**,b}", Dialect::Posix).is_err());
+    assert!(parse("{a,**}", Dialect::Win).is_err());
 }
 
 #[test]

@@ -137,11 +137,17 @@ pub fn enumerate_dir(path: &Path) -> io::Result<Vec<DirEntry>> {
     Ok(out)
 }
 
+/// Nanoseconds since the Unix epoch, sign-preserving and saturating (0 when the
+/// timestamp is unavailable). Pre-1970 times are negative; magnitudes outside the
+/// `i64` range saturate rather than wrap, matching the native backends.
 fn nanos(t: io::Result<SystemTime>) -> i64 {
-    t.ok()
-        .and_then(|st| st.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_nanos() as i64)
-        .unwrap_or(0)
+    let Ok(st) = t else { return 0 };
+    match st.duration_since(UNIX_EPOCH) {
+        Ok(d) => i64::try_from(d.as_nanos()).unwrap_or(i64::MAX),
+        Err(e) => i64::try_from(e.duration().as_nanos())
+            .map(|n| -n)
+            .unwrap_or(i64::MIN),
+    }
 }
 
 fn decode_name(os: &std::ffi::OsStr) -> Vec<CodePoint> {
