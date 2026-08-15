@@ -330,6 +330,52 @@ fn symlinked_dir_followed_only_with_follow_always() {
     assert_eq!(terminal(&items), TerminalReason::Completed);
 }
 
+#[cfg(unix)]
+#[test]
+fn follow_always_with_cycle_back_to_root_is_bounded_and_completes() {
+    use globazog::FollowLinks;
+
+    // A symlink pointing back at its own root forms a traversal cycle. With
+    // FollowLinks::Always the walk enters it, so the D-51 cycle guard (default
+    // cycle_detection) must cut the loop — the walk stays bounded and completes
+    // rather than exploding or hanging. This is the loop test the `Always` policy
+    // was missing (the acyclic case is covered above).
+    let root = tempfile::tempdir().unwrap();
+    let sub = root.path().join("sub");
+    fs::create_dir(&sub).unwrap();
+    fs::write(sub.join("f.dat"), b"x").unwrap();
+    // `sub/loop` -> the root itself: descending it re-enters the whole tree.
+    std::os::unix::fs::symlink(root.path(), sub.join("loop")).unwrap();
+
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .follow_links(FollowLinks::Always)
+        .pattern("**/*.dat", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+
+    // The guard cut the cycle: the walk terminated normally instead of diverging.
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+    // Bounded container enters — a small finite count, never unbounded growth.
+    let enters = items
+        .iter()
+        .filter(|i| matches!(i, CqItem::ContainerEnter(_)))
+        .count();
+    assert!(
+        enters < 20,
+        "container enters should be bounded, got {enters}"
+    );
+    // Every enter is still matched by exactly one end (D-64), even across the follow.
+    let ends = items
+        .iter()
+        .filter(|i| matches!(i, CqItem::ContainerEnd(_)))
+        .count();
+    assert_eq!(enters, ends);
+    // The real file is still found at least once.
+    assert!(matches(&items) >= 1);
+}
+
 #[test]
 fn cancellation_still_balances_container_ends() {
     // Even when cancelled mid-flight, every `ContainerEnter` must get a
