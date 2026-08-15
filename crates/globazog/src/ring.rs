@@ -372,7 +372,13 @@ pub enum SqOp {
 
 /// The bounded, no-drop completion ring (D-68): a lock-free MPMC queue of owned
 /// [`CqItem`]s with coalesced non-empty signalling for the consumer and a
-/// space-available signal for producer backpressure (D-11, D-60).
+/// space-available signal for producer backpressure (D-11, D-60). The blocking
+/// [`wait_pop`](Self::wait_pop) consumer path stays correct under multiple
+/// consumers via wake-propagation in [`pop`](Self::pop) (a departing consumer
+/// re-arms the signal while items remain); the blocking producer path
+/// ([`push_blocking`](Self::push_blocking)) is single-producer — the engine's
+/// multi-producer path uses [`wait_space_timeout`](Self::wait_space_timeout), whose
+/// periodic re-check is immune to a collapsed space wake.
 #[derive(Debug)]
 pub struct CompletionRing {
     queue: ArrayQueue<CqItem>,
@@ -454,10 +460,18 @@ impl CompletionRing {
     }
 
     /// Consumer: pop one item, signalling a producer that space freed (D-11).
+    ///
+    /// Also re-arms the coalesced non-empty signal when items remain, so the
+    /// blocking [`wait_pop`](Self::wait_pop) path is safe with multiple consumers:
+    /// several producer notifications can collapse into one bit, but each consumer
+    /// that leaves residue wakes the next, so no queued item can strand a waiter.
     pub fn pop(&self) -> Option<CqItem> {
         let item = self.queue.pop();
         if item.is_some() {
             self.space.notify();
+            if !self.queue.is_empty() {
+                self.nonempty.notify();
+            }
         }
         item
     }
