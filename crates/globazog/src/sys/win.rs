@@ -32,12 +32,20 @@ const FILETIME_TO_UNIX_100NS: i64 = 116_444_736_000_000_000;
 /// The listing is inline, so there are no per-entry stat failures; the only entry
 /// error possible is a late `GetFileInformationByHandleEx` read error after one or
 /// more successful batches, which is surfaced in [`DirScan::entry_errors`] while the
-/// already-collected entries are preserved (D-53). Metadata is inline, so the `plan`
-/// (D-62 lazy fetch) is irrelevant here — every field is populated regardless.
-pub fn enumerate_dir_native(path: &Path, _plan: EnumPlan) -> io::Result<DirScan> {
+/// already-collected entries are preserved (D-53). The stat-tier fields are inline, so
+/// `plan.want_stat` is moot here; the file identity, however, needs a *separate*
+/// `FileIdInfo` query, so it is fetched only when `plan.want_file_id` is set (D-62).
+pub fn enumerate_dir_native(path: &Path, plan: EnumPlan) -> io::Result<DirScan> {
     let dir = open_dir(path)?;
     let raw = dir.as_raw_handle() as HANDLE;
-    let volume = volume_serial(raw)?;
+    // The volume serial is a *separate* `FileIdInfo` query (not part of the inline
+    // directory listing), so only pay it — and only risk a redirector that does not
+    // support it — when a file identity was actually requested (D-62).
+    let volume = if plan.want_file_id {
+        volume_serial(raw)?
+    } else {
+        0
+    };
 
     // A u64 buffer guarantees 8-byte alignment for the i64 fields; the API keeps
     // every record 8-aligned, so `NextEntryOffset` chaining stays aligned.
@@ -89,7 +97,7 @@ pub fn enumerate_dir_native(path: &Path, _plan: EnumPlan) -> io::Result<DirScan>
                 unsafe { std::slice::from_raw_parts(base.add(name_off).cast::<u16>(), name_units) };
 
             if !is_dot_entry(name) {
-                out.push(make_entry(rec, name, volume));
+                out.push(make_entry(rec, name, volume, plan.want_file_id));
             }
 
             if rec.NextEntryOffset == 0 {
@@ -129,7 +137,12 @@ fn volume_serial(handle: HANDLE) -> io::Result<u64> {
     Ok(info.VolumeSerialNumber)
 }
 
-fn make_entry(rec: &FILE_ID_EXTD_DIR_INFO, name: &[u16], volume: u64) -> DirEntry {
+fn make_entry(
+    rec: &FILE_ID_EXTD_DIR_INFO,
+    name: &[u16],
+    volume: u64,
+    want_file_id: bool,
+) -> DirEntry {
     let attrs = rec.FileAttributes;
     let entry_type = if attrs & FILE_ATTRIBUTE_DIRECTORY != 0 {
         EntryType::Dir
@@ -147,9 +160,15 @@ fn make_entry(rec: &FILE_ID_EXTD_DIR_INFO, name: &[u16], volume: u64) -> DirEntr
         mtime: filetime_to_unix_nanos(rec.LastWriteTime),
         atime: filetime_to_unix_nanos(rec.LastAccessTime),
         ctime: filetime_to_unix_nanos(rec.ChangeTime),
-        file_id: FileId {
-            volume,
-            id: file_id_128(&rec.FileId),
+        // File identity is only meaningful with the volume serial (D-62); when it was
+        // not requested, leave it unset so cycle detection treats it as unknown.
+        file_id: if want_file_id {
+            FileId {
+                volume,
+                id: file_id_128(&rec.FileId),
+            }
+        } else {
+            FileId { volume: 0, id: 0 }
         },
     }
 }
