@@ -1,9 +1,10 @@
 # globazog — Build Checklist
 
 Built **bottom-up** per [DESIGN-NOTES.md](DESIGN-NOTES.md). Completed milestones
-**M1–M9** (matcher → dialects → predicates → `sys` incl. native Win/Linux backends →
+**M1–M10** (matcher → dialects → predicates → `sys` incl. native Win/Linux backends →
 ring → the synchronous Model B engine → end-to-end integration, example, docs →
-per-entry error propagation + fatal-error terminal) are archived in
+per-entry error propagation + fatal-error terminal → client-controlled symlink follow
+policy) are archived in
 [COMPLETED-CHECKLIST.md](COMPLETED-CHECKLIST.md). Only the remaining pending work is
 listed below.
 

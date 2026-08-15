@@ -7,7 +7,7 @@
 //! (defaults to the current dir and `**/*.rs` + `**/*.md`). Patterns use the `win`
 //! dialect on Windows (case-insensitive) and `posix` elsewhere.
 
-use globazog::{CqItem, Dialect, QueryBuilder, TerminalReason};
+use globazog::{CqItem, Dialect, MetaMask, QueryBuilder, TerminalReason};
 use std::time::Instant;
 
 fn main() {
@@ -24,7 +24,9 @@ fn main() {
         Dialect::Posix
     };
 
-    let mut builder = QueryBuilder::new().root(&dir);
+    // The report prints each match's byte size, so request SIZE explicitly (D-62):
+    // stat-tier fields are only populated when a predicate or the result shape asks.
+    let mut builder = QueryBuilder::new().root(&dir).result_shape(MetaMask::SIZE);
     for p in &patterns {
         builder = builder.pattern(p, dialect, Vec::new());
     }
