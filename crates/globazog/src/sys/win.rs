@@ -41,7 +41,7 @@ pub fn enumerate_dir_native(path: &Path, plan: EnumPlan) -> io::Result<DirScan> 
     // The volume serial is a *separate* `FileIdInfo` query (not part of the inline
     // directory listing), so only pay it — and only risk a redirector that does not
     // support it — when a file identity was actually requested (D-62).
-    let volume = if plan.want_file_id {
+    let volume = if plan.wants_any_file_id() {
         volume_serial(raw)?
     } else {
         0
@@ -100,7 +100,7 @@ pub fn enumerate_dir_native(path: &Path, plan: EnumPlan) -> io::Result<DirScan> 
                 unsafe { std::slice::from_raw_parts(base.add(name_off).cast::<u16>(), name_units) };
 
             if !is_dot_entry(name) {
-                out.push(make_entry(rec, name, volume, plan.want_file_id));
+                out.push(make_entry(rec, name, volume, plan));
             }
 
             if rec.NextEntryOffset == 0 {
@@ -140,22 +140,18 @@ fn volume_serial(handle: HANDLE) -> io::Result<u64> {
     Ok(info.VolumeSerialNumber)
 }
 
-fn make_entry(
-    rec: &FILE_ID_EXTD_DIR_INFO,
-    name: &[u16],
-    volume: u64,
-    want_file_id: bool,
-) -> DirEntry {
+fn make_entry(rec: &FILE_ID_EXTD_DIR_INFO, name: &[u16], volume: u64, plan: EnumPlan) -> DirEntry {
     let attrs = rec.FileAttributes;
     let entry_type = if attrs & FILE_ATTRIBUTE_DIRECTORY != 0 {
         EntryType::Dir
     } else {
         EntryType::File
     };
+    let is_reparse = attrs & FILE_ATTRIBUTE_REPARSE_POINT != 0;
     DirEntry {
         name: decode::decode_utf16(name),
         entry_type,
-        is_reparse: attrs & FILE_ATTRIBUTE_REPARSE_POINT != 0,
+        is_reparse,
         reparse_tag: rec.ReparsePointTag,
         attributes: attrs,
         size: rec.EndOfFile as u64,
@@ -163,9 +159,10 @@ fn make_entry(
         mtime: filetime_to_unix_nanos(rec.LastWriteTime),
         atime: filetime_to_unix_nanos(rec.LastAccessTime),
         ctime: filetime_to_unix_nanos(rec.ChangeTime),
-        // File identity is only meaningful with the volume serial (D-62); when it was
-        // not requested, leave it unset so cycle detection treats it as unknown.
-        file_id: if want_file_id {
+        // File identity is only meaningful with the volume serial (D-62); when this
+        // entry's id was not requested, leave it unset so cycle detection treats it
+        // as unknown.
+        file_id: if plan.wants_file_id_for(is_reparse) {
             FileId {
                 volume,
                 id: file_id_128(&rec.FileId),

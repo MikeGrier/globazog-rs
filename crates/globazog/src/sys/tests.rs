@@ -229,6 +229,7 @@ fn portable_plan_without_stat_skips_metadata() {
     let plan = EnumPlan {
         want_stat: false,
         want_file_id: false,
+        want_reparse_file_id: false,
     };
     let names_only = enumerate_dir(root.path(), plan).unwrap().entries;
     let f = names_only
@@ -260,6 +261,7 @@ fn native_linux_plan_without_stat_uses_dtype_only() {
     let plan = EnumPlan {
         want_stat: false,
         want_file_id: false,
+        want_reparse_file_id: false,
     };
     let entries = enumerate_dir_native(root.path(), plan).unwrap().entries;
     assert!(entries.iter().any(|e| e.entry_type == EntryType::Dir));
@@ -269,4 +271,69 @@ fn native_linux_plan_without_stat_uses_dtype_only() {
         .unwrap();
     assert_eq!(f.size, 0);
     assert_eq!(f.file_id.id, 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn portable_reparse_only_file_id_skips_regular_entries() {
+    // The reparse-only request (the engine's D-51 cycle-detection need) fetches the
+    // id for a symlink but not for a regular file; the all-entries request fetches it
+    // for every entry. Both are honored without `want_stat`.
+    let root = tempfile::tempdir().unwrap();
+    fs::write(root.path().join("f.txt"), b"x").unwrap();
+    std::os::unix::fs::symlink("f.txt", root.path().join("link")).unwrap();
+
+    let reparse_only = EnumPlan {
+        want_stat: false,
+        want_file_id: false,
+        want_reparse_file_id: true,
+    };
+    let e = enumerate_dir(root.path(), reparse_only).unwrap().entries;
+    let f = e.iter().find(|x| x.entry_type == EntryType::File).unwrap();
+    let l = e.iter().find(|x| x.is_reparse).unwrap();
+    assert_eq!(f.file_id.id, 0);
+    assert!(l.file_id.id != 0);
+
+    let all = EnumPlan {
+        want_stat: false,
+        want_file_id: true,
+        want_reparse_file_id: false,
+    };
+    let e = enumerate_dir(root.path(), all).unwrap().entries;
+    let f = e.iter().find(|x| x.entry_type == EntryType::File).unwrap();
+    assert!(f.file_id.id != 0);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn native_linux_reparse_only_file_id_skips_regular_entries() {
+    use super::linux::enumerate_dir_native;
+
+    // Same distinction on the native Linux backend, where the optimization avoids one
+    // `statx` per regular entry.
+    let root = tempfile::tempdir().unwrap();
+    fs::write(root.path().join("f.txt"), b"x").unwrap();
+    std::os::unix::fs::symlink("f.txt", root.path().join("link")).unwrap();
+
+    let reparse_only = EnumPlan {
+        want_stat: false,
+        want_file_id: false,
+        want_reparse_file_id: true,
+    };
+    let e = enumerate_dir_native(root.path(), reparse_only)
+        .unwrap()
+        .entries;
+    let f = e.iter().find(|x| x.entry_type == EntryType::File).unwrap();
+    let l = e.iter().find(|x| x.is_reparse).unwrap();
+    assert_eq!(f.file_id.id, 0);
+    assert!(l.file_id.id != 0);
+
+    let all = EnumPlan {
+        want_stat: false,
+        want_file_id: true,
+        want_reparse_file_id: false,
+    };
+    let e = enumerate_dir_native(root.path(), all).unwrap().entries;
+    let f = e.iter().find(|x| x.entry_type == EntryType::File).unwrap();
+    assert!(f.file_id.id != 0);
 }

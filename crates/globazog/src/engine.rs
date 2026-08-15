@@ -455,7 +455,10 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
         | MetaMask::ATTRS;
     let enum_plan = sys::EnumPlan {
         want_stat: fetch_mask.intersects(stat_mask),
-        want_file_id: query.options.cycle_detection
+        // Cycle detection (D-51) only ever inspects a reparse point's id, so request
+        // the narrow reparse-only identity rather than statting every entry.
+        want_file_id: false,
+        want_reparse_file_id: query.options.cycle_detection
             && query.options.follow_links == FollowLinks::Always,
     };
     let permits = query.options.permits.max(1);

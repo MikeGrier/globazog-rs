@@ -75,7 +75,7 @@ pub fn enumerate_dir_native(path: &Path, plan: EnumPlan) -> io::Result<DirScan> 
         // symlink we might follow (D-51), or `d_type` is unknown and must be resolved
         // to a type. Otherwise the listing's `d_type` is enough (D-62).
         let need_stat = plan.want_stat
-            || (matches!(dtype, FileType::Symlink) && plan.want_file_id)
+            || plan.wants_file_id_for(matches!(dtype, FileType::Symlink))
             || matches!(dtype, FileType::Unknown);
         if !need_stat {
             entries.push(make_entry_from_dtype(name, *dtype));

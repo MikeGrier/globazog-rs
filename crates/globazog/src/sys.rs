@@ -116,8 +116,15 @@ pub struct EntryFailure {
 pub struct EnumPlan {
     /// Fetch the stat-tier fields (size, timestamps, attributes).
     pub want_stat: bool,
-    /// Fetch the object's file identity, needed for reparse cycle detection (D-51).
+    /// Fetch *every* entry's file identity (volume + file id), honored uniformly by
+    /// all backends: on Linux/portable it forces a per-entry stat; on Windows it
+    /// keeps the inline id and queries the volume serial.
     pub want_file_id: bool,
+    /// Fetch file identity for reparse points (symlinks / junctions) **only** — the
+    /// narrower need of D-51 cycle detection, which never inspects a non-reparse
+    /// entry's id. Cheaper than [`want_file_id`](Self::want_file_id): it stats just
+    /// the symlinks, not every regular entry.
+    pub want_reparse_file_id: bool,
 }
 
 impl EnumPlan {
@@ -125,7 +132,18 @@ impl EnumPlan {
     pub const FULL: EnumPlan = EnumPlan {
         want_stat: true,
         want_file_id: true,
+        want_reparse_file_id: true,
     };
+
+    /// Whether any file identity is requested (all entries or reparse-only).
+    pub fn wants_any_file_id(&self) -> bool {
+        self.want_file_id || self.want_reparse_file_id
+    }
+
+    /// Whether an entry with the given reparse status needs its file identity fetched.
+    pub fn wants_file_id_for(&self, is_reparse: bool) -> bool {
+        self.want_file_id || (is_reparse && self.want_reparse_file_id)
+    }
 }
 
 /// Enumerate one directory, dispatching to the platform's native backend where one
@@ -188,7 +206,7 @@ fn read_one_entry(
     } else {
         EntryType::Other
     };
-    if !(plan.want_stat || (ft.is_symlink() && plan.want_file_id)) {
+    if !(plan.want_stat || plan.wants_file_id_for(ft.is_symlink())) {
         return Ok(DirEntry {
             name,
             entry_type,
