@@ -117,6 +117,21 @@ fn duplicate_derived_roots_are_deduped() {
 }
 
 #[test]
+fn anchored_pattern_scopes_to_its_own_root_only() {
+    let q = QueryBuilder::new()
+        .root("/tmp")
+        .pattern("*.txt", Dialect::Posix, empty_emit()) // relative → explicit root /tmp
+        .pattern("/etc/*.conf", Dialect::Posix, empty_emit()) // anchored → /etc
+        .build()
+        .unwrap();
+    assert_eq!(q.roots, vec![Root::new("/tmp"), Root::new("/etc")]);
+    // The relative pattern applies to the explicit root (index 0).
+    assert_eq!(q.patterns[0].roots, vec![0]);
+    // The anchored pattern applies only to its derived root (/etc = index 1), D-38.
+    assert_eq!(q.patterns[1].roots, vec![1]);
+}
+
+#[test]
 fn fetch_mask_unions_emit_descend_and_result_shape() {
     let q = QueryBuilder::new()
         .root("/data")

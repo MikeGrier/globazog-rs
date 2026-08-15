@@ -41,6 +41,9 @@ struct ScanJob {
     container: ContainerId,
     /// Parent container, or `None` for a root.
     parent: Option<ContainerId>,
+    /// Index into `Query::roots` this scan belongs to; scopes which patterns apply
+    /// (D-38). Inherited by child scans.
+    root: usize,
     /// The `ContainerEnter` name (entry blob, or root index for a root).
     name: ContainerName,
 }
@@ -194,6 +197,7 @@ impl Engine {
                 rel: Arc::new(child_rel),
                 container: child_id,
                 parent: Some(parent.container),
+                root: parent.root,
                 name: ContainerName::Entry(Name::from_code_points(&entry.name)),
             });
             sh.outstanding += 1;
@@ -269,7 +273,10 @@ impl Engine {
             path.push(&entry.name);
 
             // Emit: per-pattern glob match AND that pattern's emit conjunction (D-66).
-            let hits = self.patterns.matches(&path);
+            // Only patterns that apply to this scan's root are considered, so an
+            // anchored pattern never matches under an unrelated root (D-38).
+            let mut hits = self.patterns.matches(&path);
+            hits.retain(|&i| self.query.patterns[i].roots.contains(&job.root));
             if !hits.is_empty() {
                 let mut mask = PatternMask::new(self.query.patterns.len());
                 let mut any = false;
@@ -301,7 +308,9 @@ impl Engine {
                 entry.entry_type == EntryType::Dir
             };
             if dir_candidate
-                && self.patterns.should_descend(&path)
+                && self.patterns.should_descend_where(&path, |i| {
+                    self.query.patterns[i].roots.contains(&job.root)
+                })
                 && eval_all(&self.query.descend, &meta)
                 && self.admit_descend(entry)
             {
@@ -450,6 +459,7 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
             rel: Arc::new(Vec::new()),
             container: cid,
             parent: None,
+            root: i,
             name: ContainerName::Root(i as u32),
         });
     }

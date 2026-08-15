@@ -279,7 +279,10 @@ escaping that follows.
   **fork**; overlapping roots/anchors collapse (no directory enumerated twice).
 - **D-38. Relative patterns are root-independent templates applied at every root**
   (logical cross-product), still one physical enumeration per unique directory.
-  Anchored patterns self-root and ignore supplied roots.
+  Anchored patterns self-root and ignore supplied roots. *Realized by a per-pattern
+  applicable-root set (`PatternEntry.roots`): a relative pattern lists every supplied
+  root, an anchored pattern only its derived root; each scan carries its root index
+  and `matches`/`should_descend` consider only patterns applicable to it.*
 - **D-39. Descend is the union across the set.** Descend if *any* live pattern
   still wants the directory; stop (do not descend) only when dead for **every**
   pattern. The user descend-predicate (D-56) is ANDed on top.

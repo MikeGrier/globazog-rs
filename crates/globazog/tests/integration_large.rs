@@ -369,3 +369,26 @@ fn cancellation_still_balances_container_ends() {
         TerminalReason::Cancelled | TerminalReason::Completed
     ));
 }
+
+#[cfg(unix)]
+#[test]
+fn anchored_pattern_does_not_cross_apply_to_other_roots() {
+    // D-38: an anchored pattern must match only under its own derived root, never
+    // under an unrelated supplied root that happens to contain a matching name.
+    let a = tempfile::tempdir().unwrap();
+    fs::write(a.path().join("foo.conf"), b"x").unwrap();
+    let b = tempfile::tempdir().unwrap();
+    fs::write(b.path().join("bar.conf"), b"x").unwrap();
+
+    // Supplied root `a` (no relative pattern) + an anchored pattern rooted at `b`.
+    let bpat = format!("{}/*.conf", b.path().display());
+    let handle = QueryBuilder::new()
+        .root(a.path())
+        .pattern(&bpat, Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    // Only `bar.conf` under `b`; `foo.conf` under `a` is NOT reported.
+    assert_eq!(matches(&items), 1);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+}

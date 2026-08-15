@@ -98,6 +98,22 @@ impl PatternSet {
             .iter()
             .any(|p| descend_viable(&p.pattern.segments, dir, p.case))
     }
+
+    /// Like [`should_descend`](Self::should_descend) but only over patterns whose
+    /// index satisfies `applies` — used to scope the descend decision to the patterns
+    /// that apply to the current root, so an anchored pattern does not force descent
+    /// under an unrelated root (D-38).
+    pub fn should_descend_where(
+        &self,
+        dir: &[&[CodePoint]],
+        applies: impl Fn(usize) -> bool,
+    ) -> bool {
+        self.patterns
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| applies(*i))
+            .any(|(_, p)| descend_viable(&p.pattern.segments, dir, p.case))
+    }
 }
 
 /// Whether some non-empty continuation of `dir` could match `pat` — the sound

@@ -48,6 +48,10 @@ pub struct PatternEntry {
     pub glob: CompiledPattern,
     /// The per-pattern emit conjunction (empty = pass-all, D-66).
     pub emit: Vec<Leaf>,
+    /// Indices into [`Query::roots`] this pattern applies to (D-38): a relative
+    /// pattern applies to every supplied root; a self-rooting pattern applies only
+    /// to its own derived root, never a supplied one.
+    pub roots: Vec<usize>,
 }
 
 /// Whether the traversal follows a reparse point / symlink that resolves to a
@@ -252,10 +256,9 @@ impl QueryBuilder {
     /// Lower to the core [`Query`], compiling every pattern (fallible, D-66).
     ///
     /// Relative patterns bind to the explicit roots; each self-rooting pattern
-    /// contributes its own derived root. The core model is orthogonal — the engine
-    /// applies the pattern set across the root set (D-36) — so mixing absolute and
-    /// relative patterns in one query may cross-apply; isolate an absolute pattern
-    /// by submitting it in its own query.
+    /// contributes its own derived root and applies **only** there (D-38), so mixing
+    /// absolute and relative patterns in one query is safe — an anchored pattern is
+    /// never evaluated against an unrelated supplied root.
     pub fn build(self) -> Result<Query, Error> {
         if self.patterns.is_empty() {
             return Err(Error::Pattern("query has no patterns".into()));
@@ -279,16 +282,24 @@ impl QueryBuilder {
                 .or(self.options.default_case)
                 .unwrap_or_else(|| pend.dialect.default_case());
 
-            let (relative, anchor) = match parsed.anchor {
+            let (relative, anchor, pattern_roots) = match parsed.anchor {
+                // A relative pattern is a root-independent template applied at every
+                // supplied root (D-38).
                 Anchor::Relative => {
                     has_relative = true;
-                    (parsed.pattern, Anchor::Relative)
+                    (
+                        parsed.pattern,
+                        Anchor::Relative,
+                        (0..explicit_roots).collect::<Vec<usize>>(),
+                    )
                 }
+                // A self-rooting (anchored) pattern applies only to its own derived
+                // root, never the supplied roots (D-38).
                 other => {
                     let (root, relative) =
                         lower_self_rooting(other, parsed.pattern, &self.base, pend.dialect)?;
-                    intern_root(&mut roots, root);
-                    (relative, other)
+                    let idx = intern_root(&mut roots, root);
+                    (relative, other, vec![idx])
                 }
             };
 
@@ -300,6 +311,7 @@ impl QueryBuilder {
                     case,
                 },
                 emit: pend.emit.clone(),
+                roots: pattern_roots,
             });
         }
 
