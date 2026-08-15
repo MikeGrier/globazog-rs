@@ -16,7 +16,7 @@ name: release-please
 #   - CHANGELOG.md
 #
 # After merging the Release PR the tag v{version} is created; a crates.io
-# publish workflow (tracked in CHECKLIST.md, M1-6) triggers on that tag.
+# publish workflow (tracked in COMPLETED-CHECKLIST.md, M1-6) triggers on that tag.
 
 on:
   push:
