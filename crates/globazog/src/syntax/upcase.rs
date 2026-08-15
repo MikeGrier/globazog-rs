@@ -4,7 +4,7 @@
 //! (RtlUpcaseUnicodeChar) - the table CompareStringOrdinal(bIgnoreCase) uses (D-28).
 //! Do not edit by hand; regenerate with the script. Frozen snapshot (gospel).
 
-/// Sorted BMP code-unit -> uppercase deltas; identity mappings are omitted.
+/// Sorted BMP code-unit -> uppercase code-unit mapping; identity mappings are omitted.
 pub(crate) static UPCASE: &[(u16, u16)] = &[
     (0x0061, 0x0041),
     (0x0062, 0x0042),
