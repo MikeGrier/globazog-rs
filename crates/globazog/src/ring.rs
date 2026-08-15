@@ -9,7 +9,7 @@
 //! # Representation choices (D-69)
 //!
 //! - **Name blob:** a CQ item carries the entry name in the crate's reversible
-//!   code-point representation ([`decode`], D-46) rather than raw native code
+//!   code-point representation ([`crate::syntax::decode`], D-46) rather than raw native code
 //!   units. The whole matcher pipeline already operates in code-point space and the
 //!   transform is lossless, so this is the "one representation, two readers" of
 //!   D-63 realized as the decoded form. A future zero-copy native-blob / inline

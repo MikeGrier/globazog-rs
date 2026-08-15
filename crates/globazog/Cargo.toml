@@ -3,6 +3,7 @@
 [package]
 name        = "globazog"
 description = "A high-performance, Windows-first globbing and directory-traversal library for Rust."
+readme      = "README.md"
 version.workspace       = true
 authors.workspace       = true
 edition.workspace       = true

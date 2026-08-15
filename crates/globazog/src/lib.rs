@@ -30,6 +30,41 @@
 //! }
 //! ```
 //!
+//! # Servicing the completion ring
+//!
+//! [`QueryHandle::completions`] gives you the [`CompletionRing`]. Pop items with
+//! [`wait_pop`](CompletionRing::wait_pop) (blocking), [`pop`](CompletionRing::pop)
+//! (non-blocking), or [`drain`](CompletionRing::drain) (all queued), and keep going
+//! until a [`CqItem::Terminal`] arrives — it is always the last item. The variants:
+//!
+//! - [`CqItem::Match`] — an entry matched. [`Match::name`] is the entry name,
+//!   [`Match::matched`] is a [`PatternMask`] whose `.iter()` yields the indices of
+//!   the patterns that matched (in the order they were added), and [`Match::meta`]
+//!   carries the requested [size / timestamps / type](EntryMetaOwned).
+//! - [`CqItem::ContainerEnter`] / [`CqItem::ContainerEnd`] — a directory scan
+//!   started / its subtree finished. Ends cascade bottom-up and are 1:1 with their
+//!   enters; an enter always precedes any `Match` or child that references it.
+//! - [`CqItem::Error`] — a per-entry failure (e.g. permission denied); the walk
+//!   continues past it (D-53).
+//! - [`CqItem::Terminal`] — the walk ended, [`Completed`](TerminalReason::Completed)
+//!   or [`Cancelled`](TerminalReason::Cancelled).
+//!
+//! Full paths are not shipped per entry; reconstruct them client-side by keeping a
+//! `container id → (parent, name)` map from the [`ContainerEnter`] stream and
+//! walking to the root (a [`ContainerName::Root`] carries the root's index). For a
+//! flat listing you often only need [`Match::name`], as the example above shows.
+//!
+//! # Filtering, backpressure, and cancellation
+//!
+//! Each pattern takes a per-pattern **emit** filter (the third argument to
+//! [`pattern`](QueryBuilder::pattern)) and the query takes one **descend** filter
+//! ([`descend`](QueryBuilder::descend)); both are AND-only conjunctions of [`Leaf`]
+//! conditions evaluated inline. The ring is **bounded and never drops** — a slow
+//! consumer simply throttles the walk (D-11). [`QueryHandle::cancel`] stops early
+//! (you still get a `Cancelled` terminal after queued items), and dropping the
+//! handle cancels and joins the engine threads. See [`Options`] to tune the permit
+//! count, ring capacity, and cycle detection.
+//!
 //! # Dialects and brace escaping (D-45)
 //!
 //! Patterns are parsed in a named [`Dialect`]. [`Dialect::Posix`] uses `/`
