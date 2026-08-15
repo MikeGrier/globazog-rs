@@ -262,3 +262,42 @@ native Linux backend is blocked on a Linux test environment (this host is Window
 
 - [x] **M8-4. Docs pass**: crate-level docs with a runnable-shape example, the `win`
   brace-doubling escape section (D-45), and a DESIGN-NOTES / `D-70` cross-link.
+
+
+## M9 — Per-entry error propagation & fatal-error terminal (review-driven, PR #1)
+
+Two distinct error semantics surfaced by PR review. **A** = a single bad entry must
+not drop its readable siblings (a bug against the *existing* D-53 per-entry contract).
+**B** = some errors must be able to *stop* the whole enumeration with a terminal
+"stopped due to error" notification (a new capability; `TerminalReason` has only
+`Completed`/`Cancelled` today). Sequenced A → B.
+
+- [ ] **M9-1. Per-entry failures don't abort a directory** (D-53): introduce
+  `sys::DirScan { entries: Vec<DirEntry>, entry_errors: Vec<io::Error> }` returned by
+  `enumerate` / `enumerate_dir` and the native backends. Per-entry `file_type` /
+  `metadata` / `statx` failures are collected into `entry_errors` instead of aborting
+  the directory via `?`; the outer `io::Result::Err` stays reserved for a
+  directory-open/read failure. The Windows inline-metadata backend has no per-entry
+  stat, so it returns an empty `entry_errors`. Update the `sys` unit tests.
+
+- [ ] **M9-2. Engine surfaces per-entry errors and continues** (D-53): the engine
+  emits one `CqItem::Error` per `entry_errors` element (attributed to the container)
+  and then processes the surviving entries. Integration test: a directory containing
+  an unreadable entry among readable ones still yields every readable sibling plus
+  exactly one error item, and the walk continues.
+
+- [ ] **M9-3. Fatal-error terminal** (new **D-71**; refines D-53, extends D-61): add
+  `TerminalReason::Failed` as a **unit** variant (the error rides in a preceding
+  `CqItem::Error`, so the reason stays `Copy`/`Eq`). The engine gains a `fatal` flag
+  mirroring `cancel`: a **root-level (depth 0) enumeration-open failure** emits the
+  error item, stops the walk, and the coordinator emits `Terminal{Failed}`; failures
+  below the root remain per-container/per-entry and continue (D-53). Record **D-71**
+  in DESIGN-NOTES.md (with the adjacent refine markers on D-53 and D-61) in the same
+  commit, including the recorded note that the initial fatal policy is depth-0 only
+  (multiple-roots behavior is called out for future refinement). Integration test:
+  an unopenable root ⇒ a `CqItem::Error` immediately followed by `Terminal::Failed`.
+
+- [ ] **M9-4. Contract docs pass**: update the crate-level error/terminal narrative
+  ([lib.rs](crates/globazog/src/lib.rs)), the `CqItem::Error` / `TerminalReason`
+  doc comments, and the DEVELOPMENT.md status to describe per-entry-continue vs.
+  fatal-terminate. Ends the milestone (implicit build/test/sync gate follows).
