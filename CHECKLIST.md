@@ -12,7 +12,16 @@ End-of-milestone steps (repo standard, **not** listed as items): build the defau
 workspace debug+release with zero warnings; test the in-scope crate; sync with
 origin and push.
 
-## M7 — Engine (the scheduler)
+## M7+ — Engine follow-ups (parked, gated beyond completed M7)
+
+These are **parked, not pending**: milestone M7 is complete and archived in
+[COMPLETED-CHECKLIST.md](COMPLETED-CHECKLIST.md). The two items below are gated on
+deliverables that do not yet exist (the native async backends / the D-5 completion
+abstraction, and the tri-state predicate refactor), so they sit in the `M7+`
+placeholder bucket and keep their stable historical IDs (`M7-6`, `M7-7`,
+cross-referenced from the source and design notes). They graduate to a real numbered
+milestone when that later work is authored — they are **not** open obligations of the
+completed M7.
 
 - [ ] **M7-6. Native async enumeration backends + relative-open** (D-4, D-6, D-9,
   D-59): overlapped Windows enumeration + IOCP + `CreateThreadpoolIo` (`TP_IO`) +
