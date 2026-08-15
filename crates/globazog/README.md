@@ -166,7 +166,7 @@ The core library (matcher, dialects, predicates, native/portable backends, ring,
 the synchronous scheduler) is complete and tested on Windows and Linux. Planned
 follow-ups: native async backends (IOCP / io_uring) with parent-relative open and
 `\\?\` long-path support, `defer-to-client` predicate escalation, and a zero-copy
-name-blob fast path. See `CHECKLIST.md` and `DESIGN-NOTES.md` at the repository root.
+name-blob fast path. See [CHECKLIST.md](../../CHECKLIST.md) and [DESIGN-NOTES.md](../../DESIGN-NOTES.md) at the repository root.
 
 ## License
 

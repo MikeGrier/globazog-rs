@@ -19,7 +19,7 @@ plan live in [DESIGN-NOTES.md](DESIGN-NOTES.md), [CHECKLIST.md](CHECKLIST.md),
   `cargo doc` is warning-free.
 - Edition **2024**, MSRV **1.97** (CI MSRV job pinned to 1.97.0).
 
-### Remaining work (all gated on real blockers, tracked in CHECKLIST.md)
+### Remaining work (all gated on real blockers, tracked in [CHECKLIST.md](CHECKLIST.md))
 
 - **M7-6** — native async backends (Windows IOCP/`TP_IO`/`TP_WORK`, Linux io_uring),
   parent-fd relative-open (openat / handle-relative `NtCreateFile`), and restoring
@@ -33,7 +33,7 @@ plan live in [DESIGN-NOTES.md](DESIGN-NOTES.md), [CHECKLIST.md](CHECKLIST.md),
 - **M∞-1 / M∞-2** — zero-copy inline name blob + over-cap spill; syscall-level
   FS-filter pushdown at terminal literal segments. Gated on profiling.
 
-The engine's model is decision **D-70** in DESIGN-NOTES.md.
+The engine's model is decision **D-70** in [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
 ## Build & test — Windows (host)
 
