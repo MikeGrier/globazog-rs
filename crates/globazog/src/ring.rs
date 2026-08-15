@@ -353,12 +353,12 @@ pub enum Decision {
     Reject,
 }
 
-/// A submission-queue op (D-66, #4). The initial `SubmitQuery` boots a query; the
-/// rest steer a running one.
+/// A submission-queue op that steers a running query (D-66, #4). Booting a query is
+/// done directly by [`QueryBuilder::submit`](crate::QueryBuilder::submit) in the
+/// synchronous engine; an SQ-driven query-submission (boot) op belongs to the async
+/// reactor model and lands with it (M7-6), so it is not represented here yet.
 #[derive(Debug)]
 pub enum SqOp {
-    /// Submit a compiled query for execution.
-    SubmitQuery(Box<crate::builder::Query>),
     /// Cancel the running query (D-61).
     Cancel,
     /// Answer a `defer-to-client` request (D-58).

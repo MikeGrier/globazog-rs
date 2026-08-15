@@ -23,8 +23,11 @@ origin and push.
   the `\?\` NT-layer open (dropped when M5-4 switched to `std::fs::OpenOptions`) so
   Windows **long paths (>260)** and **trailing-dot-space names** work — and add the
   M8-2 integration coverage for them (those files cannot be created through the Win32
-  layer, so the tests belong here). **Gated on** building the D-5 completion
-  abstraction + the native async FFI, not a missing consumer.
+  layer, so the tests belong here). Re-introduce the SQ **query-submission (boot) op**
+  here — it was removed from the synchronous engine as inert (the sync engine boots
+  directly via `QueryBuilder::submit`); the reactor model is where an SQ-driven submit
+  becomes meaningful (D-66). **Gated on** building the D-5 completion abstraction + the
+  native async FFI, not a missing consumer.
 
 - [ ] **M7-7. `defer-to-client` predicate escalation** (D-58): add a **tri-state**
   predicate leaf (accept / reject / defer) to the M4 vocabulary; on defer, emit a

@@ -395,8 +395,6 @@ fn sq_loop(engine: &Arc<Engine>, sq: &Arc<SubmissionQueue>) {
                 SqOp::Cancel => engine.request_cancel(),
                 // `defer-to-client` answers have no waiter yet (forward item).
                 SqOp::DecisionAnswer { .. } => {}
-                // The engine is already running; a re-submit is a no-op here.
-                SqOp::SubmitQuery(_) => {}
             }
         }
         sq.wait_timeout(Duration::from_millis(25));
