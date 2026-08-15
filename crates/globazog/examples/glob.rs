@@ -1,53 +1,77 @@
 // Copyright (c) 2026 Mike Grier
 
-//! A minimal end-to-end globber (D-57): walk a directory with two patterns and a
-//! per-pattern emit filter, printing each match (with the size and which patterns
-//! matched) and the terminal outcome.
+//! A minimal end-to-end globber (D-57): walk a directory with one or more patterns
+//! and report per-pattern match counts, a small sample, and the terminal outcome.
 //!
-//! Run with: `cargo run --example glob -- <dir>` (defaults to the current dir).
+//! Usage: `cargo run --release --example glob -- <dir> [pattern...]`
+//! (defaults to the current dir and `**/*.rs` + `**/*.md`). Patterns use the `win`
+//! dialect on Windows (case-insensitive) and `posix` elsewhere.
 
-use globazog::{Cmp, CqItem, Dialect, Leaf, QueryBuilder, TerminalReason};
+use globazog::{CqItem, Dialect, QueryBuilder, TerminalReason};
+use std::time::Instant;
 
 fn main() {
-    let dir = std::env::args().nth(1).unwrap_or_else(|| ".".to_string());
+    let mut args = std::env::args().skip(1);
+    let dir = args.next().unwrap_or_else(|| ".".to_string());
+    let mut patterns: Vec<String> = args.collect();
+    if patterns.is_empty() {
+        patterns = vec!["**/*.rs".to_string(), "**/*.md".to_string()];
+    }
 
-    let handle = QueryBuilder::new()
-        .root(&dir)
-        // Pattern 0: every Rust source file, recursively.
-        .pattern("**/*.rs", Dialect::Posix, Vec::new())
-        // Pattern 1: non-empty markdown files (a per-pattern emit filter, D-66).
-        .pattern(
-            "**/*.md",
-            Dialect::Posix,
-            vec![Leaf::Size {
-                op: Cmp::Gt,
-                value: 0,
-            }],
-        )
-        .submit()
-        .expect("valid query");
+    let dialect = if cfg!(windows) {
+        Dialect::Win
+    } else {
+        Dialect::Posix
+    };
+
+    let mut builder = QueryBuilder::new().root(&dir);
+    for p in &patterns {
+        builder = builder.pattern(p, dialect, Vec::new());
+    }
+    let handle = builder.submit().expect("valid query");
 
     let ring = handle.completions();
-    let mut matches = 0usize;
+    let started = Instant::now();
+    let mut per_pattern = vec![0usize; patterns.len()];
+    let mut total = 0usize;
+    let mut total_bytes = 0u64;
+    let mut errors = 0usize;
+    let mut dirs = 0usize;
+    let mut sample: Vec<String> = Vec::new();
+
     loop {
         match ring.wait_pop() {
             CqItem::Match(m) => {
-                matches += 1;
-                let which: Vec<usize> = m.matched.iter().collect();
-                println!(
-                    "{:>10} bytes  patterns={:?}  {}",
-                    m.meta.size,
-                    which,
-                    m.name.to_string_lossy()
-                );
+                total += 1;
+                total_bytes += m.meta.size;
+                for i in m.matched.iter() {
+                    per_pattern[i] += 1;
+                }
+                if sample.len() < 20 {
+                    sample.push(format!("{:>12}  {}", m.meta.size, m.name.to_string_lossy()));
+                }
             }
-            CqItem::Error(e) => eprintln!("error: {}", e.error),
+            CqItem::ContainerEnter(_) => dirs += 1,
+            CqItem::Error(_) => errors += 1,
             CqItem::Terminal(t) => {
+                let elapsed = started.elapsed();
+                println!("\n--- sample (first {} matches) ---", sample.len());
+                for line in &sample {
+                    println!("{line}");
+                }
+                println!("\n--- per-pattern counts ---");
+                for (p, count) in patterns.iter().zip(&per_pattern) {
+                    println!("{count:>10}  {p}");
+                }
                 let outcome = match t.reason {
                     TerminalReason::Completed => "completed",
                     TerminalReason::Cancelled => "cancelled",
                 };
-                println!("{outcome}: {matches} match(es)");
+                println!(
+                    "\n{outcome}: {total} matches, {total_bytes} bytes, {dirs} dirs scanned, \
+                     {errors} errors, in {:.2}s",
+                    elapsed.as_secs_f64()
+                );
                 break;
             }
             _ => {}
