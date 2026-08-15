@@ -40,6 +40,12 @@ impl PatternSet {
         Self::default()
     }
 
+    /// A set built from already-compiled patterns (the builder's lowered output),
+    /// preserving their order so match indices align with the caller's pattern list.
+    pub fn from_compiled(patterns: Vec<CompiledPattern>) -> Self {
+        Self { patterns }
+    }
+
     /// Parse and add a pattern; returns its index in the set. `case` overrides the
     /// dialect default (D-23) when `Some`.
     pub fn add(

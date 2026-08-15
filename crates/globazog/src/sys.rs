@@ -83,6 +83,25 @@ impl DirEntry {
     }
 }
 
+/// Enumerate one directory, dispatching to the platform's native backend where one
+/// exists (Windows `NtQueryDirectoryFile`, Linux `getdents64`+`statx`) and falling
+/// back to the portable [`enumerate_dir`] elsewhere. This is what the engine calls
+/// (D-4, D-6), so the native inline metadata / birth-time value flows through.
+pub fn enumerate(path: &Path) -> io::Result<Vec<DirEntry>> {
+    #[cfg(windows)]
+    {
+        win::enumerate_dir_native(path)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux::enumerate_dir_native(path)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        enumerate_dir(path)
+    }
+}
+
 /// Enumerate one directory's entries with inline metadata (the portable backend).
 /// Symlink-aware: entry metadata is read without following symlinks.
 pub fn enumerate_dir(path: &Path) -> io::Result<Vec<DirEntry>> {
@@ -138,6 +157,50 @@ fn decode_name(os: &std::ffi::OsStr) -> Vec<CodePoint> {
     #[cfg(not(any(windows, unix)))]
     {
         decode::decode_str(&os.to_string_lossy())
+    }
+}
+
+/// Reconstruct a native `OsString` from decoded code points — the exact reverse of
+/// [`decode_name`] (D-46). The engine needs it to build a child directory's
+/// physical path from the decoded entry name.
+pub(crate) fn encode_os_name(cps: &[CodePoint]) -> std::ffi::OsString {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStringExt;
+        let mut units: Vec<u16> = Vec::with_capacity(cps.len());
+        for &cp in cps {
+            if cp > 0xFFFF {
+                let c = cp - 0x1_0000;
+                units.push(0xD800 + ((c >> 10) as u16));
+                units.push(0xDC00 + ((c & 0x3FF) as u16));
+            } else {
+                units.push(cp as u16);
+            }
+        }
+        std::ffi::OsString::from_wide(&units)
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        let mut bytes: Vec<u8> = Vec::with_capacity(cps.len());
+        for &cp in cps {
+            if (0xDC80..=0xDCFF).contains(&cp) {
+                bytes.push((cp - 0xDC00) as u8);
+            } else if let Some(c) = char::from_u32(cp) {
+                let mut buf = [0u8; 4];
+                bytes.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+            } else {
+                bytes.extend_from_slice("\u{FFFD}".as_bytes());
+            }
+        }
+        std::ffi::OsString::from_vec(bytes)
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        cps.iter()
+            .filter_map(|&c| char::from_u32(c))
+            .collect::<String>()
+            .into()
     }
 }
 

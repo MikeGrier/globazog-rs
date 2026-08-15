@@ -103,13 +103,14 @@ impl Query {
 }
 
 /// A live query: the completion ring the client services (D-60) and the submission
-/// queue for cancellation / decision answers (D-61, D-58). Dropping the handle
-/// submits a cancel (D-61); the terminal-marker join lands when the engine is wired
-/// (M7).
-#[derive(Debug)]
+/// queue for cancellation / decision answers (D-61, D-58). The engine runs on
+/// background threads; dropping the handle submits a cancel and joins them (the
+/// RAII teardown of D-61, performed by the owned `EngineHandle`).
 pub struct QueryHandle {
     completions: Arc<CompletionRing>,
     submissions: Arc<SubmissionQueue>,
+    // Drops last, cancelling and joining the engine threads (D-61).
+    _engine: crate::engine::EngineHandle,
 }
 
 impl QueryHandle {
@@ -123,8 +124,8 @@ impl QueryHandle {
         &self.submissions
     }
 
-    /// Submit a cancel (D-61). Acknowledged by a terminal CQ marker once the engine
-    /// is wired.
+    /// Submit a cancel (D-61). Acknowledged by a terminal CQ marker that lands after
+    /// all items already queued.
     pub fn cancel(&self) {
         self.submissions.submit(SqOp::Cancel);
     }
@@ -133,15 +134,6 @@ impl QueryHandle {
     pub fn answer(&self, token: DecisionToken, decision: Decision) {
         self.submissions
             .submit(SqOp::DecisionAnswer { token, decision });
-    }
-}
-
-impl Drop for QueryHandle {
-    fn drop(&mut self) {
-        // RAII cancel (D-61). Blocking on the terminal marker is wired with the
-        // engine (M7); with no producer there is nothing to join yet, so dropping
-        // must not block.
-        self.submissions.submit(SqOp::Cancel);
     }
 }
 
@@ -304,17 +296,19 @@ impl QueryBuilder {
         })
     }
 
-    /// Build and hand off to a [`QueryHandle`] with a live ring + submission queue,
-    /// enqueuing the initial `SubmitQuery` for the engine to pick up (M7).
+    /// Build and start the engine, returning a [`QueryHandle`] whose completion ring
+    /// the client services while the walk runs on background threads (D-3, D-60).
     pub fn submit(self) -> Result<QueryHandle, Error> {
         let ring_capacity = self.options.ring_capacity;
         let query = self.build()?;
         let completions = Arc::new(CompletionRing::with_capacity(ring_capacity));
         let submissions = Arc::new(SubmissionQueue::new());
-        submissions.submit(SqOp::SubmitQuery(Box::new(query)));
+        let engine =
+            crate::engine::spawn(query, Arc::clone(&completions), Arc::clone(&submissions));
         Ok(QueryHandle {
             completions,
             submissions,
+            _engine: engine,
         })
     }
 }

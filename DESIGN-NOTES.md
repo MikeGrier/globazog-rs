@@ -495,6 +495,51 @@ escaping that follows.
     consumer. `push_blocking` is documented as single-producer/test-suited; the
     engine uses `try_push` + its own unified suspension (D-59) for multi-producer
     backpressure.
+- **D-70. The M7 engine is a synchronous worker pool realizing Model B's contract;
+  the async orchestration is a later, behavior-preserving swap.** The engine
+  (`engine.rs`) is a pool of `permits` worker threads (D-8: one permit = one live
+  scan), each pulling one directory-scan job (D-7), enumerating it **synchronously**
+  via `sys::enumerate` (native backend where present — D-4/D-6, which explicitly
+  makes Linux enumeration a blocking pool-thread syscall), evaluating emit/descend
+  **inline** (D-56), emitting CQ items, and pushing child directories back onto a
+  LIFO work stack (depth-first bias, D-48). This is a faithful realization of the
+  observable contract, **owned by us** (we define the behavior; the async backend
+  is chosen later to satisfy the same contract), with these specifics:
+  - **Container Enter/End (D-64) via a refcount cascade (D-9).** Each container's
+    refcount = 1 (own scan) + one per launched child; `release` decrements and
+    cascades upward under the state lock, collecting the zero-hitting containers,
+    then emits their `ContainerEnd`s **outside** the lock (never hold the state lock
+    across a ring push). This yields bottom-up ends and enter-before-children by
+    construction.
+  - **Unified suspension (D-59) = worker-thread blocking.** Both I/O wait (the
+    enumeration syscall) and output backpressure (a full ring) suspend the *worker
+    thread* — the thread *is* the continuation in the sync model. Backpressure uses
+    a cancel-responsive timed wait (`wait_space_timeout`) so a parked producer
+    re-checks the cancel flag; the client's drain rate is the throttle (D-11).
+  - **Cancellation (D-61) + accounting (D-50).** An `outstanding` job counter drives
+    normal completion (0 ⇒ done); a cancel flag (set via `SqOp::Cancel` on the SQ,
+    or immediately by `EngineHandle::drop`) makes workers stop pulling and bail
+    their emits. A coordinator thread joins the workers then pushes the single
+    `Terminal{Completed|Cancelled}` last (FIFO). `EngineHandle::drop` is the RAII
+    teardown: cancel, drain to unblock any parked terminal push, then join — so a
+    client that drops without draining never deadlocks.
+  - **Cycle detection (D-51).** A reparse-point directory is descended at most once
+    per `(volume, file-id)` (a shared visited set); non-reparse dirs and unknown
+    ids (portable-Windows zero) pass through.
+  - **Native names.** `sys::encode_os_name` is the exact reverse of the D-46 decode,
+    used to rebuild a child's physical path from its decoded code points.
+  - **Deferred, each with a named technical blocker (not "no consumer"):**
+    - *Relative-open (openat / handle-relative NtCreateFile, D-9).* We queue paths
+      (D-10) and open each child by full path; true parent-fd-relative open needs
+      the enumeration backend to accept a parent handle, which couples with the
+      native async backends (M7-6). → CHECKLIST M7-6.
+    - *`defer-to-client` escalation (D-58).* Needs a **tri-state** predicate leaf
+      (accept / reject / defer) the M4 bool vocabulary lacks; the SQ
+      `DecisionAnswer` plumbing and park/resume mechanism are ready to receive it.
+      → CHECKLIST M7-7.
+    - *Syscall-level FS-filter pushdown at terminal literal segments (D-19).* The
+      sound *descend* pruning (viability) is done; pushing a name filter into the
+      enumeration syscall is a pure performance add. → CHECKLIST M∞-2.
 
 ---
 

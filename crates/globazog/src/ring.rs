@@ -435,6 +435,20 @@ impl CompletionRing {
         }
     }
 
+    /// Producer: wait up to `timeout` for space to free after a full `try_push`,
+    /// returning whether space was signalled. The engine uses this for
+    /// cancel-responsive backpressure — it re-checks its cancel flag each time the
+    /// wait returns (D-11, D-59).
+    pub fn wait_space_timeout(&self, timeout: std::time::Duration) -> bool {
+        self.space.wait_timeout(timeout)
+    }
+
+    /// Wake any producer parked in [`wait_space_timeout`](Self::wait_space_timeout)
+    /// without freeing a slot — used to unblock producers on cancellation (D-61).
+    pub fn wake_producers(&self) {
+        self.space.notify();
+    }
+
     /// Consumer: pop one item, signalling a producer that space freed (D-11).
     pub fn pop(&self) -> Option<CqItem> {
         let item = self.queue.pop();
@@ -507,6 +521,15 @@ impl SubmissionQueue {
         while self.inner.lock().unwrap().is_empty() {
             self.signal.wait();
         }
+    }
+
+    /// Wait up to `timeout` for an op; returns whether one may be available. The
+    /// engine's SQ-servicing loop uses this so it can also poll its finished flag.
+    pub fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
+        if !self.inner.lock().unwrap().is_empty() {
+            return true;
+        }
+        self.signal.wait_timeout(timeout)
     }
 
     /// Whether the queue is empty.

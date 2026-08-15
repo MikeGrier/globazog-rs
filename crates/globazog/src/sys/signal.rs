@@ -41,6 +41,21 @@ impl Signal {
         *set = false;
     }
 
+    /// Block until signaled or `timeout` elapses; returns whether it was signaled.
+    /// Used for cancel-responsive backpressure waits (D-11): a parked producer
+    /// re-checks the cancel flag each time the wait returns.
+    pub fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
+        let mut set = self.set.lock().unwrap();
+        if *set {
+            *set = false;
+            return true;
+        }
+        let (mut set, _) = self.cv.wait_timeout(set, timeout).unwrap();
+        let was = *set;
+        *set = false;
+        was
+    }
+
     /// Consume and return the current signal without blocking.
     pub fn try_take(&self) -> bool {
         let mut set = self.set.lock().unwrap();

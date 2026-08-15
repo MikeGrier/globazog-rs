@@ -190,31 +190,55 @@ native Linux backend is blocked on a Linux test environment (this host is Window
   **Gated on** profiling showing the owned-copy cost matters (D-68/D-69), not on a
   missing consumer.
 
+- [ ] **M∞-2. Syscall-level FS-filter pushdown** (D-19, D-70): at a terminal literal
+  pattern segment, push a name filter into the enumeration syscall
+  (`FindFirstFileW` wildcard / `readdir` prefix) instead of enumerating the whole
+  directory and matching in-process. Sound because the pattern is gospel (D-19); the
+  in-process descend pruning already bounds *which directories* are scanned, so this
+  is a pure per-directory perf add. **Gated on** profiling, not a missing consumer.
+
 ## M7 — Engine (the scheduler)
 
-- [ ] **M7-1. Model B scheduler core** (D-3, D-7, D-8, D-12): permit-bounded scans,
-  work queue, launch pump; unit of work = one directory.
+- [x] **M7-1. Model B scheduler core** (D-3, D-7, D-8, D-12): permit-bounded worker
+  pool (one permit = one worker = one live scan), LIFO work stack, launch pump; unit
+  of work = one directory, matched/emitted inline (D-70).
 
-- [ ] **M7-2. Relative-open + parent-handle refcount** (D-9, D-10): queue paths not
-  handles; refcount cascade; `ContainerEnd` = refcount-zero (D-64); depth-first +
-  enumerate-whole-dir-before-recurse (D-48).
+- [x] **M7-2. Parent-handle refcount + queue-paths** (D-9, D-10): refcount cascade;
+  `ContainerEnd` = refcount-zero, bottom-up (D-64); depth-first +
+  enumerate-whole-dir-before-recurse (D-48); child paths queued, not handles (D-10).
+  True parent-fd **relative-open** (openat) is deferred to M7-6 (needs the backend
+  to accept a parent handle) — see M7-6.
 
-- [ ] **M7-3. Unifying suspension** (D-59, D-11, D-58): one park/resume mechanism
-  for I/O wait, backpressure, and `defer-to-client` escalation.
+- [x] **M7-3. Unifying suspension** (D-59, D-11): I/O wait and output backpressure
+  are one mechanism — worker-thread blocking (the thread is the continuation, D-70),
+  backpressure via a cancel-responsive timed wait (D-11). `defer-to-client` (D-58)
+  is spawned as M7-7 (needs a tri-state predicate leaf).
 
-- [ ] **M7-4. Cancellation + accounting** (D-50, D-61): unified outstanding-work
-  counters (resolve O-D′ here), `CancelIoEx`, single drain/teardown path, terminal
-  marker; drop-handle RAII.
+- [x] **M7-4. Cancellation + accounting** (D-50, D-61): `outstanding` job counter
+  (0 ⇒ complete) + the D-9 refcount resolve O-D′; single drain/teardown path;
+  coordinator emits the terminal marker last (FIFO); `EngineHandle::drop` RAII
+  cancel-drain-join. (`CancelIoEx` is a native-async detail → M7-6.)
 
-- [ ] **M7-5. Cycle detection + pushdown gating** (D-51, D-19): (volume-GUID/dev,
-  file-id/ino) hash set when following reparse; conservative sound FS-filter
-  pushdown at terminal segments.
+- [x] **M7-5. Cycle detection + descend pruning** (D-51, D-19): `(volume, file-id)`
+  visited set gating descent into reparse-point dirs; sound mid-pattern descend
+  viability pruning (D-39). Syscall-level FS-filter pushdown at terminal literal
+  segments (a perf add) is spawned as M∞-2.
 
-- [ ] **M7-6. Native async enumeration backends** (D-4, D-6, D-59): overlapped
-  Windows enumeration + IOCP + `CreateThreadpoolIo` (`TP_IO`) + `TP_WORK`, and the
-  Linux io_uring path where available, driven by the M7 unified park/resume
-  continuation (D-59). Moved here from M5-6: the async orchestration is the
-  scheduler's mechanism, so it belongs with the engine, not the sync backends.
+- [ ] **M7-6. Native async enumeration backends + relative-open** (D-4, D-6, D-9,
+  D-59): overlapped Windows enumeration + IOCP + `CreateThreadpoolIo` (`TP_IO`) +
+  `TP_WORK`, and the Linux io_uring path where available, driven by the M7 unified
+  park/resume continuation (D-59); as part of this, thread a **parent directory
+  handle** through the enumeration backend so children open relative to it (openat /
+  handle-relative `NtCreateFile`, D-9), replacing the current full-path open.
+  **Gated on** building the D-5 completion abstraction + the native async FFI, not a
+  missing consumer.
+
+- [ ] **M7-7. `defer-to-client` predicate escalation** (D-58): add a **tri-state**
+  predicate leaf (accept / reject / defer) to the M4 vocabulary; on defer, emit a
+  `DecisionRequest` (already a CQ variant), park the scan on the unified suspension,
+  and resume when the client answers via `SqOp::DecisionAnswer` (already SQ-wired).
+  **Gated on** the tri-state predicate refactor (M4 currently returns bool), not a
+  missing consumer.
 
 ## M8 — End-to-end integration
 

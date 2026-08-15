@@ -127,40 +127,6 @@ fn fetch_mask_unions_emit_descend_and_result_shape() {
     assert!(!mask.contains(MetaMask::ATTRS));
 }
 
-#[test]
-fn submit_produces_handle_and_enqueues_submit_query() {
-    let handle = QueryBuilder::new()
-        .root("/data")
-        .pattern("*.rs", Dialect::Posix, empty_emit())
-        .submit()
-        .unwrap();
-    assert_eq!(
-        handle.completions().capacity(),
-        Options::default().ring_capacity
-    );
-    // The initial SubmitQuery is queued for the engine.
-    match handle.submissions().try_next().unwrap() {
-        SqOp::SubmitQuery(_) => {}
-        other => panic!("expected SubmitQuery, got {other:?}"),
-    }
-}
-
-#[test]
-fn cancel_enqueues_cancel_op() {
-    let handle = QueryBuilder::new()
-        .root("/data")
-        .pattern("*.rs", Dialect::Posix, empty_emit())
-        .submit()
-        .unwrap();
-    // Drop the initial SubmitQuery.
-    let _ = handle.submissions().try_next();
-    handle.cancel();
-    match handle.submissions().try_next().unwrap() {
-        SqOp::Cancel => {}
-        other => panic!("expected Cancel, got {other:?}"),
-    }
-}
-
 #[cfg(windows)]
 #[test]
 fn win_drive_absolute_peels_into_drive_root() {
