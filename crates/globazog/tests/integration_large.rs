@@ -291,3 +291,38 @@ fn unopenable_root_terminates_with_failed() {
     assert!(matches!(items[n - 2], CqItem::Error(_)));
     assert!(matches!(&items[n - 1], CqItem::Terminal(t) if t.reason == TerminalReason::Failed));
 }
+
+#[cfg(unix)]
+#[test]
+fn symlinked_dir_followed_only_with_follow_always() {
+    use globazog::FollowLinks;
+
+    let root = tempfile::tempdir().unwrap();
+    let real = root.path().join("real");
+    fs::create_dir(&real).unwrap();
+    fs::write(real.join("f.dat"), b"x").unwrap();
+    std::os::unix::fs::symlink("real", root.path().join("link")).unwrap();
+
+    // Default (Never, D-72/D-13): the file is found once — via `real/`, never through
+    // the symlink.
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .pattern("**/*.dat", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(matches(&items), 1);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+
+    // Always: found twice — via `real/` and via `link/` — and loop-safe (the walk
+    // terminates; the reparse cycle guard bounds it).
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .follow_links(FollowLinks::Always)
+        .pattern("**/*.dat", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(matches(&items), 2);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+}

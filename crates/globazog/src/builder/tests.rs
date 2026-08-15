@@ -139,6 +139,24 @@ fn fetch_mask_unions_emit_descend_and_result_shape() {
     assert!(!mask.contains(MetaMask::ATTRS));
 }
 
+#[test]
+fn follow_links_defaults_to_never_and_is_settable() {
+    let q = QueryBuilder::new()
+        .root("/data")
+        .pattern("*.txt", Dialect::Posix, empty_emit())
+        .build()
+        .unwrap();
+    assert_eq!(q.options.follow_links, FollowLinks::Never);
+
+    let q = QueryBuilder::new()
+        .root("/data")
+        .follow_links(FollowLinks::Always)
+        .pattern("*.txt", Dialect::Posix, empty_emit())
+        .build()
+        .unwrap();
+    assert_eq!(q.options.follow_links, FollowLinks::Always);
+}
+
 #[cfg(windows)]
 #[test]
 fn win_drive_absolute_peels_into_drive_root() {

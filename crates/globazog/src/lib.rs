@@ -94,7 +94,7 @@ pub mod sys;
 
 mod engine;
 
-pub use builder::{Options, PatternEntry, Query, QueryBuilder, QueryHandle, Root};
+pub use builder::{FollowLinks, Options, PatternEntry, Query, QueryBuilder, QueryHandle, Root};
 pub use error::{EntryError, Error};
 pub use predicate::{Cmp, EntryType, Leaf, MetaMask, TimeField};
 pub use ring::{

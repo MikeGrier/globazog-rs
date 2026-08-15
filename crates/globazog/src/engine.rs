@@ -13,7 +13,7 @@
 //! the `defer-to-client` predicate escalation (D-58) is a forward item — it needs a
 //! tri-state predicate leaf that the M4 vocabulary does not yet have.
 
-use crate::builder::Query;
+use crate::builder::{FollowLinks, Query};
 use crate::error::EntryError;
 use crate::predicate::{EntryType, eval_all};
 use crate::ring::{
@@ -276,8 +276,17 @@ impl Engine {
             }
 
             // Descend: a directory that some pattern still wants AND the descend
-            // conjunction admits (D-56, D-66); reparse loops are cut (D-51).
-            if entry.entry_type == EntryType::Dir
+            // conjunction admits (D-56, D-66); reparse loops are cut (D-51). A
+            // reparse point (symlink / junction) is a descend candidate only when the
+            // follow policy opts in (D-72) — the library never auto-follows by
+            // default (D-13); a followed non-directory target then fails to enumerate
+            // and surfaces as a per-entry error (D-53).
+            let dir_candidate = if entry.is_reparse {
+                self.query.options.follow_links == FollowLinks::Always
+            } else {
+                entry.entry_type == EntryType::Dir
+            };
+            if dir_candidate
                 && self.patterns.should_descend(&path)
                 && eval_all(&self.query.descend, &meta)
                 && self.admit_descend(entry)

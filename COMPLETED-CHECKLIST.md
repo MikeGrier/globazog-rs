@@ -260,3 +260,18 @@ not drop its readable siblings (a bug against the *existing* D-53 per-entry cont
   ([lib.rs](crates/globazog/src/lib.rs)), the `CqItem::Error` / `TerminalReason`
   doc comments, and the DEVELOPMENT.md status to describe per-entry-continue vs.
   fatal-terminate. Ends the milestone (implicit build/test/sync gate follows).
+
+
+## Moved 2026-08-15 — M10 (client-controlled symlink follow policy, D-72)
+
+- [x] **M10-1. `FollowLinks` follow policy** (new **D-72**; resolves the D-13/D-51
+  relationship): add a `FollowLinks { Never, Always }` enum and
+  `Options.follow_links` (default `Never`), re-exported from the crate root. The
+  engine descend gate treats a reparse entry as a directory *candidate* only under
+  `Always` (both platforms), after which `should_descend` + the `descend` conjunction
+  (D-56/D-66) filter it and `admit_descend` (D-51) cuts loops; a followed non-directory
+  target surfaces as a per-entry `CqItem::Error` (D-53). Recorded **D-72** in
+  DESIGN-NOTES.md (default = D-13 never-auto-follow; D-51 is the loop guard when
+  following is on; Windows no longer auto-follows dir-symlinks by default). Unit test
+  (default `Never`) + unix integration test (a symlinked dir is descended only under
+  `Always`).

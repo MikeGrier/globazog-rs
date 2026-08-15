@@ -50,6 +50,21 @@ pub struct PatternEntry {
     pub emit: Vec<Leaf>,
 }
 
+/// Whether the traversal follows a reparse point / symlink that resolves to a
+/// directory (D-72). Default is [`Never`](Self::Never): the library does not
+/// auto-follow (D-13); a client opts in explicitly, and the `descend` conjunction
+/// (D-56/D-66) then filters which followed directories to actually enter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum FollowLinks {
+    /// Never descend into a reparse-point / symlinked directory (default, D-13).
+    #[default]
+    Never,
+    /// Descend into reparse-point / symlinked directories. A followed target that is
+    /// not a directory fails to enumerate and surfaces as a per-entry error (D-53);
+    /// loop safety comes from the D-51 cycle-detection visited set.
+    Always,
+}
+
 /// Per-query execution options (D-66).
 #[derive(Clone, Copy, Debug)]
 pub struct Options {
@@ -59,6 +74,8 @@ pub struct Options {
     pub ring_capacity: usize,
     /// Whether to run reparse-cycle detection (D-51).
     pub cycle_detection: bool,
+    /// The reparse/symlink follow policy (D-72).
+    pub follow_links: FollowLinks,
     /// The query-level case default applied when a pattern gives no override (D-23).
     pub default_case: Option<CaseSensitivity>,
 }
@@ -69,6 +86,7 @@ impl Default for Options {
             permits: 64,
             ring_capacity: 1024,
             cycle_detection: true,
+            follow_links: FollowLinks::Never,
             default_case: None,
         }
     }
@@ -210,6 +228,12 @@ impl QueryBuilder {
     /// Set the per-query descend conjunction (D-66).
     pub fn descend(mut self, leaves: Vec<Leaf>) -> Self {
         self.descend = leaves;
+        self
+    }
+
+    /// Set the reparse/symlink follow policy (D-72). Default `FollowLinks::Never`.
+    pub fn follow_links(mut self, policy: FollowLinks) -> Self {
+        self.options.follow_links = policy;
         self
     }
 

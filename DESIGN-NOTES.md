@@ -106,7 +106,7 @@ Last updated: 2026-08-14.
   (Resolves O-12.)
 - **D-52. No default reparse follow policy.** The client decides via submitted
   policy (which sees reparse status, D-13); the library never auto-follows.
-  (Resolves O-13.)
+  Realized by the `FollowLinks` option, **D-72**. (Resolves O-13.)
 - **D-53. Errors are surfaced as items in the output stream**, never aborting the
   walk (e.g. a permission-denied subtree becomes an error item). (Resolves O-14.)
   A **fatal** subset (a root that cannot be enumerated at all) instead stops the walk
@@ -488,6 +488,23 @@ escaping that follows.
   open point: with multiple roots this terminates the whole query on the first
   unopenable root — whether a bad root should instead be a per-root error item while
   sibling roots continue is left for a future refinement (raise before relying on it).
+- **D-72. Reparse/symlink follow is a client `FollowLinks` policy (realizes D-52).**
+  `Options.follow_links` is `FollowLinks::{Never, Always}`, default **`Never`** — the
+  library never auto-follows (D-13/D-52). The engine descend gate treats a reparse
+  entry (symlink / junction) as a directory *candidate* only under `Always`, on both
+  platforms; a plain non-reparse directory is always a candidate. Once a candidate,
+  the existing filters apply unchanged: pattern viability (`should_descend`, D-39),
+  the client's `descend` conjunction (D-56/D-66), and the D-51 cycle guard — so
+  following is *just filtering* plus the one default toggle a conjunction cannot
+  express (an AND can only narrow, never opt back in). A followed target that is not
+  actually a directory fails to enumerate and surfaces as a per-entry `CqItem::Error`
+  (D-53); we do not stat-through to pre-classify. Loop safety under `Always` needs no
+  target identity: any loop re-traverses a reparse point whose own file-id repeats and
+  is deduped by the D-51 visited set on the second encounter. **Behavior change:** the
+  native Windows backend previously auto-followed directory symlinks (they classify as
+  `Dir`+reparse); it now defaults to `Never` too, so both platforms are consistent.
+  `FollowLinks` is an enum, not a bool, to leave room for a future policy (e.g.
+  same-volume-only) without an ABI break.
 - **D-69. Ring implementation choices (M6).** The ring/API surface is realized with
   three v1 simplifications, each an owned decision (not a delegation) with a named
   reason and a deferral gated on a real factor, not on "no consumer":
