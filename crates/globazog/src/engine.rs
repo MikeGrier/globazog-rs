@@ -215,8 +215,14 @@ impl Engine {
                 return;
             }
         };
-        // Per-entry failures (M9-2) and the fatal-root terminal (M9-3) consume
-        // `scan.entry_errors`; for now the readable entries drive the walk.
+        // Surface each per-entry metadata failure as its own error item; the walk
+        // continues with the entries that were read successfully (D-53).
+        for err in scan.entry_errors {
+            self.emit(CqItem::Error(CqError {
+                container: Some(job.container),
+                error: EntryError { source: err },
+            }));
+        }
         let entries = scan.entries;
 
         let rel_slices: Vec<&[CodePoint]> = job.rel.iter().map(|s| s.as_slice()).collect();

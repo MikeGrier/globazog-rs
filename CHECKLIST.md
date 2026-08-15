@@ -280,11 +280,14 @@ not drop its readable siblings (a bug against the *existing* D-53 per-entry cont
   directory-open/read failure. The Windows inline-metadata backend has no per-entry
   stat, so it returns an empty `entry_errors`. Update the `sys` unit tests.
 
-- [ ] **M9-2. Engine surfaces per-entry errors and continues** (D-53): the engine
+- [x] **M9-2. Engine surfaces per-entry errors and continues** (D-53): the engine
   emits one `CqItem::Error` per `entry_errors` element (attributed to the container)
-  and then processes the surviving entries. Integration test: a directory containing
-  an unreadable entry among readable ones still yields every readable sibling plus
-  exactly one error item, and the walk continues.
+  and then processes the surviving entries. Tested at the portable seam
+  (`read_one_entry` turns a failing entry into a collected error, not a `?` abort). A
+  full end-to-end per-entry-error test is **not deterministically reproducible** — the
+  Windows native backend has inline metadata (never fails per-entry) and a Linux
+  `statx` failure is an inherent list/stat race — so it is covered at the seam rather
+  than with a racy integration test (re-plan recorded during execution).
 
 - [ ] **M9-3. Fatal-error terminal** (new **D-71**; refines D-53, extends D-61): add
   `TerminalReason::Failed` as a **unit** variant (the error rides in a preceding

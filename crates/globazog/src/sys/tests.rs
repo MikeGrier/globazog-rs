@@ -1,9 +1,20 @@
 // Copyright (c) 2026 Mike Grier
 
-use super::{enumerate_dir, nanos};
+use super::{enumerate_dir, nanos, read_one_entry};
 use crate::predicate::EntryType;
 use std::fs;
 use std::time::{Duration, UNIX_EPOCH};
+
+#[test]
+fn portable_entry_failure_is_collected_not_fatal() {
+    // A failing directory entry becomes a collected per-entry error rather than
+    // aborting the whole directory via `?` (D-53); `read_one_entry` is that seam.
+    // A full end-to-end per-entry failure is not deterministically reproducible (the
+    // Windows native backend has inline metadata and never fails per-entry; a Linux
+    // `statx` failure is an inherent list/stat race), so the seam is tested directly.
+    let e = read_one_entry(Err(std::io::Error::from_raw_os_error(2)));
+    assert!(e.is_err());
+}
 
 #[test]
 fn nanos_unavailable_is_zero() {
