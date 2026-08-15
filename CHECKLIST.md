@@ -152,14 +152,10 @@ native Linux backend is blocked on a Linux test environment (this host is Window
   attrs, reparse tag, 128-bit file id), NT-layer long/`\?\` paths. Testable on this
   Windows host; slots in behind the M5-1 contract.
 
-- [ ] **M5-5. Native Linux backend** (D-6, D-9): `openat` + `getdents64` + `statx`
-  (io_uring where available), `(st_dev, st_ino)` file ids.
-  **BLOCKER:** no Linux test environment on this Windows host — the FFI cannot be
-  validated locally. Gated on a Linux dev/CI-iteration environment.
-
-- [ ] **M5-6. Async orchestration → M7** (D-4, D-59): overlapped enumeration +
-  IOCP + `CreateThreadpoolIo` (`TP_IO`) + `TP_WORK`. Built with the M7 scheduler,
-  since the async park/resume is its unified continuation mechanism (D-59).
+- [x] **M5-5. Native Linux backend** (D-6, D-9): `openat` + `getdents64` + `statx`
+  via the safe `rustix::fs` wrappers, `makedev(dev)`/`ino` file ids, reversible
+  byte-name decode (D-46), symlink-aware (no follow). Unblocked by a WSL2 Ubuntu
+  toolchain; validated there (native-vs-portable parity + symlink tests).
 
 ## M6 — Ring & API surface
 
@@ -213,6 +209,12 @@ native Linux backend is blocked on a Linux test environment (this host is Window
 - [ ] **M7-5. Cycle detection + pushdown gating** (D-51, D-19): (volume-GUID/dev,
   file-id/ino) hash set when following reparse; conservative sound FS-filter
   pushdown at terminal segments.
+
+- [ ] **M7-6. Native async enumeration backends** (D-4, D-6, D-59): overlapped
+  Windows enumeration + IOCP + `CreateThreadpoolIo` (`TP_IO`) + `TP_WORK`, and the
+  Linux io_uring path where available, driven by the M7 unified park/resume
+  continuation (D-59). Moved here from M5-6: the async orchestration is the
+  scheduler's mechanism, so it belongs with the engine, not the sync backends.
 
 ## M8 — End-to-end integration
 

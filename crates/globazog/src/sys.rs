@@ -12,6 +12,9 @@ pub mod signal;
 #[cfg(windows)]
 pub mod win;
 
+#[cfg(target_os = "linux")]
+pub mod linux;
+
 use crate::predicate::{EntryMeta, EntryType};
 use crate::syntax::{CodePoint, decode};
 use std::fs;

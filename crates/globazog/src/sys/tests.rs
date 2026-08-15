@@ -102,3 +102,69 @@ fn native_matches_portable_and_has_file_ids() {
     assert_eq!(file_sizes.len(), 10);
     assert!(file_sizes.iter().all(|&s| s == 5));
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn native_linux_matches_portable_and_has_file_ids() {
+    use super::linux::enumerate_dir_native;
+
+    let root = tempfile::tempdir().unwrap();
+    for i in 0..5 {
+        let d = root.path().join(format!("dir{i}"));
+        fs::create_dir(&d).unwrap();
+        for j in 0..10 {
+            fs::write(d.join(format!("f{j}.txt")), b"hello").unwrap();
+        }
+    }
+
+    let portable = enumerate_dir(root.path()).unwrap();
+    let native = enumerate_dir_native(root.path()).unwrap();
+
+    // Same set of top-level directory names (both skip `.` / `..`).
+    let mut pn: Vec<Vec<u32>> = portable.iter().map(|e| e.name.clone()).collect();
+    let mut nn: Vec<Vec<u32>> = native.iter().map(|e| e.name.clone()).collect();
+    pn.sort();
+    nn.sort();
+    assert_eq!(pn, nn);
+    assert_eq!(nn.len(), 5);
+
+    // statx supplies real (dev, ino) file ids (D-51) and matches the portable
+    // backend's identity for the same objects.
+    assert!(native.iter().all(|e| e.file_id.id != 0));
+    let mut pids: Vec<_> = portable
+        .iter()
+        .map(|e| (e.name.clone(), e.file_id))
+        .collect();
+    let mut nids: Vec<_> = native.iter().map(|e| (e.name.clone(), e.file_id)).collect();
+    pids.sort_by(|a, b| a.0.cmp(&b.0));
+    nids.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(pids, nids);
+
+    // Native file sizes and modification times come from statx (D-13).
+    let files = enumerate_dir_native(&root.path().join("dir0")).unwrap();
+    let regular: Vec<_> = files
+        .iter()
+        .filter(|e| e.entry_type == EntryType::File)
+        .collect();
+    assert_eq!(regular.len(), 10);
+    assert!(regular.iter().all(|e| e.size == 5));
+    assert!(regular.iter().all(|e| e.mtime > 0));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn native_linux_reports_symlinks_without_following() {
+    use super::linux::enumerate_dir_native;
+
+    let root = tempfile::tempdir().unwrap();
+    fs::write(root.path().join("target.txt"), b"payload").unwrap();
+    std::os::unix::fs::symlink("target.txt", root.path().join("link")).unwrap();
+
+    let native = enumerate_dir_native(root.path()).unwrap();
+    let link = native
+        .iter()
+        .find(|e| e.name == crate::syntax::decode::decode_bytes(b"link"))
+        .expect("symlink entry present");
+    assert!(link.is_reparse);
+    assert_eq!(link.entry_type, EntryType::Other);
+}
