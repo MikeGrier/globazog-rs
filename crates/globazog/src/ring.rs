@@ -335,7 +335,8 @@ pub enum CqItem {
     Match(Match),
     /// A directory subtree completed.
     ContainerEnd(ContainerEnd),
-    /// A per-entry failure.
+    /// A per-entry or per-directory failure; the walk continues past it (D-53). When
+    /// it is a fatal error (D-71) it is the last `Error` before a `Terminal::Failed`.
     Error(CqError),
     /// A `defer-to-client` escalation.
     DecisionRequest(DecisionRequest),

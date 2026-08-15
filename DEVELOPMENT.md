@@ -9,10 +9,13 @@ plan live in [DESIGN-NOTES.md](DESIGN-NOTES.md), [CHECKLIST.md](CHECKLIST.md), a
 
 ## Current status (2026-08-14)
 
-- **Numbered milestones M1–M8 are complete**: matcher → dialects → predicates →
+- **Numbered milestones M1–M9 are complete**: matcher → dialects → predicates →
   `sys` (native Windows `NtQueryDirectoryFile` + Linux `openat`/`getdents64`/`statx`
   backends, portable `std::fs` fallback) → ring (SQ/CQ) → the synchronous Model B
-  engine → end-to-end integration, an example, and docs.
+  engine → end-to-end integration, an example, and docs. **M9** (review-driven)
+  added per-entry error propagation (a single failing entry no longer discards its
+  readable siblings; `sys::DirScan`, D-53) and a fatal-error terminal
+  (`TerminalReason::Failed` for a root that cannot be enumerated, D-71).
 - The library is working end-to-end: `examples/glob.rs` scans a ~43k-directory
   drive for `**/*.h` in ~1.3 s (release).
 - Test counts: ~129 on Windows, ~131 on Linux (extra unix-gated tests), all green;

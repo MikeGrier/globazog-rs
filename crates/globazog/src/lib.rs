@@ -44,10 +44,15 @@
 //! - [`CqItem::ContainerEnter`] / [`CqItem::ContainerEnd`] — a directory scan
 //!   started / its subtree finished. Ends cascade bottom-up and are 1:1 with their
 //!   enters; an enter always precedes any `Match` or child that references it.
-//! - [`CqItem::Error`] — a per-entry failure (e.g. permission denied); the walk
-//!   continues past it (D-53).
-//! - [`CqItem::Terminal`] — the walk ended, [`Completed`](TerminalReason::Completed)
-//!   or [`Cancelled`](TerminalReason::Cancelled).
+//! - [`CqItem::Error`] — a per-entry or per-directory failure (e.g. permission
+//!   denied, or an entry that vanished mid-scan); the walk continues past it (D-53).
+//!   A single unreadable entry never discards its readable siblings.
+//! - [`CqItem::Terminal`] — the walk ended:
+//!   [`Completed`](TerminalReason::Completed) (ran to the end),
+//!   [`Cancelled`](TerminalReason::Cancelled) (a [`cancel`](QueryHandle::cancel) was
+//!   honored), or [`Failed`](TerminalReason::Failed) (a fatal error — currently a
+//!   root that could not be enumerated — stopped the walk; the causing error is the
+//!   [`CqItem::Error`] immediately before this terminal, D-71).
 //!
 //! Full paths are not shipped per entry; reconstruct them client-side by keeping a
 //! `container id → (parent, name)` map from the [`ContainerEnter`] stream and

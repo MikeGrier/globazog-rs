@@ -300,7 +300,7 @@ not drop its readable siblings (a bug against the *existing* D-53 per-entry cont
   (multiple-roots behavior is called out for future refinement). Integration test:
   an unopenable root ⇒ a `CqItem::Error` immediately followed by `Terminal::Failed`.
 
-- [ ] **M9-4. Contract docs pass**: update the crate-level error/terminal narrative
+- [x] **M9-4. Contract docs pass**: update the crate-level error/terminal narrative
   ([lib.rs](crates/globazog/src/lib.rs)), the `CqItem::Error` / `TerminalReason`
   doc comments, and the DEVELOPMENT.md status to describe per-entry-continue vs.
   fatal-terminate. Ends the milestone (implicit build/test/sync gate follows).
