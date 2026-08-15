@@ -133,6 +133,42 @@ fn bounded_ring_delivers_everything_under_backpressure() {
 }
 
 #[test]
+fn concurrent_container_ends_do_not_deadlock_on_a_full_ring() {
+    // Many containers + a capacity-1 ring + many workers: `ContainerEnd` is a
+    // mandatory (cancel-immune) push, so several workers routinely block on a full
+    // ring at once. The push must survive a coalesced space wake (the periodic
+    // recheck recovers a lost one) — otherwise a worker sleeps forever, joins hang,
+    // and the terminal never arrives.
+    let root = tempfile::tempdir().unwrap();
+    for d in 0..120 {
+        let dir = root.path().join(format!("d{d:03}"));
+        fs::create_dir(&dir).unwrap();
+        for f in 0..3 {
+            fs::write(dir.join(format!("f{f}.dat")), b"x").unwrap();
+        }
+    }
+
+    let opts = Options {
+        permits: 16,
+        ring_capacity: 1,
+        ..Options::default()
+    };
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .options(opts)
+        .pattern("**/*.dat", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+
+    // Every container closed exactly once (120 dirs + root) and the walk completed.
+    assert_eq!(enters(&items), 121);
+    assert_eq!(ends(&items), 121);
+    assert_eq!(matches(&items), 360);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+}
+
+#[test]
 fn cancel_large_walk_terminates_once() {
     let root = tempfile::tempdir().unwrap();
     for d in 0..40 {

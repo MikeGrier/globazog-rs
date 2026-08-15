@@ -347,14 +347,33 @@ impl Engine {
         sh.visited.insert(entry.file_id)
     }
 
+    /// Push a mandatory item (a `ContainerEnd` / fatal error / terminal,
+    /// D-64/D-71), parking on a full ring but **never** bailing on cancel — the item
+    /// must always land. Uses the same timed recheck loop as [`emit`](Self::emit)
+    /// rather than the ring's single-producer `push_blocking`, so a `space` wake
+    /// coalesced away between concurrent workers cannot strand one of them: the
+    /// periodic recheck recovers a lost wake.
+    fn push_mandatory(&self, item: CqItem) {
+        let mut item = item;
+        loop {
+            match self.ring.try_push(item) {
+                Ok(()) => return,
+                Err(back) => {
+                    item = back;
+                    self.ring.wait_space_timeout(Duration::from_millis(5));
+                }
+            }
+        }
+    }
+
     /// Emit `id`'s `ContainerEnd` exactly once and cancel-immune (D-64): the end is
-    /// mandatory, so it uses `push_blocking` and is guarded by the `open` set, which
-    /// makes it idempotent — a worker and the coordinator can never double-emit it.
+    /// mandatory, so it uses [`push_mandatory`](Self::push_mandatory) and is guarded
+    /// by the `open` set, which makes it idempotent — a worker and the coordinator can
+    /// never double-emit it.
     fn emit_end(&self, id: ContainerId) {
         let owed = self.shared.lock().unwrap().open.remove(&id).is_some();
         if owed {
-            self.ring
-                .push_blocking(CqItem::ContainerEnd(ContainerEnd { id }));
+            self.push_mandatory(CqItem::ContainerEnd(ContainerEnd { id }));
         }
     }
 
@@ -559,11 +578,11 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
             // the terminal, so the D-71 ordering contract holds regardless of what
             // the workers enqueued (all have joined by now).
             if let Some(err) = e.fatal_error.lock().unwrap().take() {
-                e.ring.push_blocking(CqItem::Error(err));
+                e.push_mandatory(CqItem::Error(err));
             }
             // Terminal lands after all queued items (FIFO, D-61); block until the
             // client (or the drop-drain) makes room.
-            e.ring.push_blocking(CqItem::Terminal(Terminal { reason }));
+            e.push_mandatory(CqItem::Terminal(Terminal { reason }));
             e.finished.store(true, Ordering::Release);
         })
     };
