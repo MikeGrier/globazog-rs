@@ -322,17 +322,20 @@ fn unopenable_root_terminates_with_failed() {
 
     assert_eq!(terminal(&items), TerminalReason::Failed);
     assert_eq!(count(&items, |i| matches!(i, CqItem::Error(_))), 1);
-    assert_eq!(enters(&items), 1);
-    assert_eq!(ends(&items), 1);
-    // The causing error lands immediately before the terminal (D-71), not separated
-    // from it by the root ContainerEnd or another worker's items.
+    // The root could not be opened, so no container is announced at all (D-64): a
+    // handle-open failure yields only an error + fatal terminal, never a phantom
+    // enter/end pair.
+    assert_eq!(enters(&items), 0);
+    assert_eq!(ends(&items), 0);
+    // The causing error lands immediately before the terminal (D-71).
     let n = items.len();
     assert!(matches!(items[n - 2], CqItem::Error(_)));
     assert!(matches!(&items[n - 1], CqItem::Terminal(t) if t.reason == TerminalReason::Failed));
-    // A directory-level failure (the unopenable root) names no single entry (D-53).
+    // A root open failure is scoped to no container and names no single entry (D-53).
     let CqItem::Error(e) = &items[n - 2] else {
         unreachable!()
     };
+    assert!(e.container.is_none());
     assert!(e.error.name.is_none());
 }
 

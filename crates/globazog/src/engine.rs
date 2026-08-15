@@ -213,6 +213,42 @@ impl Engine {
     /// finalize the refcount (emitting any resulting ends).
     fn process(&self, job: ScanJob) {
         let depth = job.rel.len() as u32;
+
+        // Open/enumerate BEFORE announcing the container: `ContainerEnter` is a
+        // handle-open event (D-64), so a directory that cannot be opened must not
+        // produce a phantom enter/end pair — it yields only an error (D-53), fatal
+        // for a root (D-71).
+        let scan = match sys::enumerate(&job.dir, self.enum_plan) {
+            Ok(scan) => scan,
+            Err(err) => {
+                // No container was announced, so attribute the error to the parent
+                // being scanned (`None` for a root) and name the directory that
+                // failed to open where we have it (a child carries its own name; a
+                // root carries only its index).
+                let name = match &job.name {
+                    ContainerName::Entry(n) => Some(n.clone()),
+                    ContainerName::Root(_) => None,
+                };
+                let cq_err = CqError {
+                    container: job.parent,
+                    error: EntryError { name, source: err },
+                };
+                if job.parent.is_none() {
+                    // A root that cannot be enumerated is fatal (D-71). No container
+                    // was entered, so just release accounting and hand the error to
+                    // the coordinator to land immediately before Terminal{Failed}.
+                    self.emit_ends(self.release(job.container));
+                    self.request_fatal(cq_err);
+                } else {
+                    // Below the root: a per-directory failure is surfaced and the
+                    // walk continues (D-53).
+                    self.emit(CqItem::Error(cq_err));
+                    self.emit_ends(self.release(job.container));
+                }
+                return;
+            }
+        };
+
         if !self.emit(CqItem::ContainerEnter(ContainerEnter {
             id: job.container,
             parent: job.parent,
@@ -231,34 +267,6 @@ impl Engine {
             .unwrap()
             .open
             .insert(job.container, depth);
-
-        let scan = match sys::enumerate(&job.dir, self.enum_plan) {
-            Ok(scan) => scan,
-            Err(err) => {
-                let cq_err = CqError {
-                    container: Some(job.container),
-                    error: EntryError {
-                        name: None,
-                        source: err,
-                    },
-                };
-                if job.parent.is_none() {
-                    // A root that cannot be enumerated is fatal (D-71). Close the
-                    // root container for balance, then hand the error to the
-                    // coordinator so it lands immediately before Terminal{Failed}
-                    // rather than being separated from it by this ContainerEnd or
-                    // by another worker's items.
-                    self.emit_ends(self.release(job.container));
-                    self.request_fatal(cq_err);
-                } else {
-                    // Below the root: a per-directory failure is surfaced and the
-                    // walk continues (D-53).
-                    self.emit(CqItem::Error(cq_err));
-                    self.emit_ends(self.release(job.container));
-                }
-                return;
-            }
-        };
         // Surface each per-entry metadata failure as its own error item; the walk
         // continues with the entries that were read successfully (D-53).
         for failure in scan.entry_errors {
