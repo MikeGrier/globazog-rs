@@ -29,7 +29,7 @@ completed M7.
   park/resume continuation (D-59); as part of this, thread a **parent directory
   handle** through the enumeration backend so children open relative to it (openat /
   handle-relative `NtCreateFile`, D-9), replacing the current full-path open. Restore
-  the `\?\` NT-layer open (dropped when M5-4 switched to `std::fs::OpenOptions`) so
+  the `\\?\` NT-layer open (dropped when M5-4 switched to `std::fs::OpenOptions`) so
   Windows **long paths (>260)** and **trailing-dot-space names** work — and add the
   M8-2 integration coverage for them (those files cannot be created through the Win32
   layer, so the tests belong here). Re-introduce the SQ **query-submission (boot) op**
