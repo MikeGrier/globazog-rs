@@ -313,6 +313,9 @@ pub enum TerminalReason {
     Completed,
     /// A [`SqOp::Cancel`] was honored.
     Cancelled,
+    /// The traversal was stopped by a fatal error (D-71); the causing error is
+    /// delivered in a [`CqItem::Error`] that precedes this terminal.
+    Failed,
 }
 
 /// The final CQ item (D-61): lands after every item already enqueued (FIFO),

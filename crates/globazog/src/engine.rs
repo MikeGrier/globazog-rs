@@ -75,6 +75,8 @@ struct Engine {
     shared: Mutex<Shared>,
     work_cv: Condvar,
     cancel: AtomicBool,
+    /// Set when a fatal error stops the walk (D-71); makes the terminal `Failed`.
+    fatal: AtomicBool,
     finished: AtomicBool,
     ids: IdSpace,
 }
@@ -207,11 +209,18 @@ impl Engine {
         let scan = match sys::enumerate(&job.dir) {
             Ok(scan) => scan,
             Err(err) => {
+                let is_root = job.parent.is_none();
                 self.emit(CqItem::Error(CqError {
                     container: Some(job.container),
                     error: EntryError { source: err },
                 }));
                 self.emit_ends(self.release(job.container));
+                // A root that cannot even be enumerated is fatal: stop the walk so
+                // the coordinator emits Terminal{Failed} (D-71). A failure below the
+                // root stays per-container and the walk continues (D-53).
+                if is_root {
+                    self.request_fatal();
+                }
                 return;
             }
         };
@@ -286,6 +295,14 @@ impl Engine {
         for id in ends {
             self.emit(CqItem::ContainerEnd(ContainerEnd { id }));
         }
+    }
+
+    /// Trigger a fatal termination (D-71): stop the walk exactly like a cancel, but
+    /// mark it fatal so the coordinator emits `Terminal{Failed}`. The causing error
+    /// must already have been emitted (this sets `cancel`, after which `emit` bails).
+    fn request_fatal(&self) {
+        self.fatal.store(true, Ordering::Release);
+        self.request_cancel();
     }
 
     /// Request cancellation (idempotent): wake workers and any parked emitters.
@@ -395,6 +412,7 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
         shared: Mutex::new(shared),
         work_cv: Condvar::new(),
         cancel: AtomicBool::new(false),
+        fatal: AtomicBool::new(false),
         finished: AtomicBool::new(false),
         ids,
     });
@@ -417,7 +435,9 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
             for w in workers {
                 let _ = w.join();
             }
-            let reason = if e.cancel.load(Ordering::Acquire) {
+            let reason = if e.fatal.load(Ordering::Acquire) {
+                TerminalReason::Failed
+            } else if e.cancel.load(Ordering::Acquire) {
                 TerminalReason::Cancelled
             } else {
                 TerminalReason::Completed

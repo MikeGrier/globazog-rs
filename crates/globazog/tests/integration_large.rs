@@ -249,3 +249,24 @@ fn non_utf8_filename_is_enumerated_and_matched() {
     assert!(names[0].name.code_points().len() >= "name.dat".len());
     assert_eq!(names[0].meta.size, 7);
 }
+
+#[test]
+fn unopenable_root_terminates_with_failed() {
+    // A root that cannot be enumerated at all is fatal (D-71): the stream ends with
+    // Terminal::Failed, preceded by exactly one error item, and the root container
+    // is still balanced (one enter, one end).
+    let root = tempfile::tempdir().unwrap();
+    let missing = root.path().join("does-not-exist");
+
+    let handle = QueryBuilder::new()
+        .root(&missing)
+        .pattern("**/*", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+
+    assert_eq!(terminal(&items), TerminalReason::Failed);
+    assert_eq!(count(&items, |i| matches!(i, CqItem::Error(_))), 1);
+    assert_eq!(enters(&items), 1);
+    assert_eq!(ends(&items), 1);
+}

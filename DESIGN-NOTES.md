@@ -109,6 +109,8 @@ Last updated: 2026-08-14.
   (Resolves O-13.)
 - **D-53. Errors are surfaced as items in the output stream**, never aborting the
   walk (e.g. a permission-denied subtree becomes an error item). (Resolves O-14.)
+  A **fatal** subset (a root that cannot be enumerated at all) instead stops the walk
+  with a `Terminal{Failed}` acknowledgement — see **D-71**.
 
 Windows caveat on record (not a decision): even the relative `NtCreateFile`
 **open** effectively completes **synchronously** — only the *enumerate* overlaps.
@@ -475,6 +477,17 @@ escaping that follows.
   client wanting discard simply stops draining and drops. **Dropping the query
   handle** is the RAII convenience (submit-cancel + block on the terminal marker
   in `Drop`), giving async teardown a real join point. (Resolves O-D.)
+- **D-71. Fatal errors terminate the walk with `Terminal{Failed}` (refines D-53,
+  extends D-61).** Most failures stay per-entry / per-container error items and the
+  walk continues (D-53). A **fatal** error instead stops the whole enumeration and is
+  acknowledged by a `Terminal{Failed}` marker. The causing error is **not** carried
+  *inside* the terminal (the reason stays a `Copy` unit value) — it rides in the
+  `CqItem::Error` emitted immediately before the terminal. **Initial fatal policy = a
+  root (depth-0) directory that cannot be enumerated at all is fatal**; every failure
+  below the root remains per-container / per-entry and the walk continues. Recorded
+  open point: with multiple roots this terminates the whole query on the first
+  unopenable root — whether a bad root should instead be a per-root error item while
+  sibling roots continue is left for a future refinement (raise before relying on it).
 - **D-69. Ring implementation choices (M6).** The ring/API surface is realized with
   three v1 simplifications, each an owned decision (not a delegation) with a named
   reason and a deferral gated on a real factor, not on "no consumer":
@@ -524,7 +537,8 @@ escaping that follows.
     normal completion (0 ⇒ done); a cancel flag (set via `SqOp::Cancel` on the SQ,
     or immediately by `EngineHandle::drop`) makes workers stop pulling and bail
     their emits. A coordinator thread joins the workers then pushes the single
-    `Terminal{Completed|Cancelled}` last (FIFO). `EngineHandle::drop` is the RAII
+    `Terminal{Completed|Cancelled|Failed}` last (FIFO; `Failed` = fatal error, D-71).
+    `EngineHandle::drop` is the RAII
     teardown: cancel, drain to unblock any parked terminal push, then join — so a
     client that drops without draining never deadlocks.
   - **Cycle detection (D-51).** A reparse-point directory is descended at most once

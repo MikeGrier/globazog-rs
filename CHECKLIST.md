@@ -289,7 +289,7 @@ not drop its readable siblings (a bug against the *existing* D-53 per-entry cont
   `statx` failure is an inherent list/stat race — so it is covered at the seam rather
   than with a racy integration test (re-plan recorded during execution).
 
-- [ ] **M9-3. Fatal-error terminal** (new **D-71**; refines D-53, extends D-61): add
+- [x] **M9-3. Fatal-error terminal** (new **D-71**; refines D-53, extends D-61): add
   `TerminalReason::Failed` as a **unit** variant (the error rides in a preceding
   `CqItem::Error`, so the reason stays `Copy`/`Eq`). The engine gains a `fatal` flag
   mirroring `cancel`: a **root-level (depth 0) enumeration-open failure** emits the

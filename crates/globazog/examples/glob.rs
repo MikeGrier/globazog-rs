@@ -66,6 +66,7 @@ fn main() {
                 let outcome = match t.reason {
                     TerminalReason::Completed => "completed",
                     TerminalReason::Cancelled => "cancelled",
+                    TerminalReason::Failed => "failed",
                 };
                 println!(
                     "\n{outcome}: {total} matches, {total_bytes} bytes, {dirs} dirs scanned, \
