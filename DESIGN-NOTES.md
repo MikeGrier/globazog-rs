@@ -273,7 +273,10 @@ escaping that follows.
   **leading-literal-prefix → root** peeling. **Leading-prefix → root is the
   utility's job; mid-pattern literal pruning stays engine-core** (e.g. `foo` in
   `**/foo/*.c`).
-- **D-35. Canonicalization is owned, not delegated.** No `GetFullPathName` (CWD /
+- **D-35. Canonicalization is owned, not delegated.**
+  **Partially realized** — the builder currently deduplicates only byte-for-byte-equal
+  root paths; the owned lexical canonicalization below is tracked in
+  [CHECKLIST.md](CHECKLIST.md) → M11. No `GetFullPathName` (CWD /
   per-drive globals; strips trailing dots/spaces) and no blind delegation to
   lexical canonicalizers like `PathCchCanonicalizeEx` (they **resolve `..`**,
   contradicting D-26). Root canonicalization (for **anchor dedup/merge**) lives in
@@ -286,9 +289,13 @@ escaping that follows.
 
 - **D-36. The unit of matching is a *set* of patterns over a *set* of roots.**
   Single-pattern is the degenerate N=1 case. `*.c*` + `*.h*` enumerates **once**.
-- **D-37. One deduplicated traversal.** Each pattern contributes a literal-prefix
-  **anchor**; shared-prefix anchors **merge** into one seek, divergent anchors
-  **fork**; overlapping roots/anchors collapse (no directory enumerated twice).
+- **D-37. One deduplicated traversal.**
+  **Partially realized** — the builder currently deduplicates only byte-for-byte-equal
+  root paths, so lexically-equivalent (`.`-fold / separator / platform-case) and
+  ancestor/descendant-overlapping roots are **not** yet collapsed; full realization is
+  tracked in [CHECKLIST.md](CHECKLIST.md) → M11. Each pattern contributes a
+  literal-prefix **anchor**; shared-prefix anchors **merge** into one seek, divergent
+  anchors **fork**; overlapping roots/anchors collapse (no directory enumerated twice).
 - **D-38. Relative patterns are root-independent templates applied at every root**
   (logical cross-product), still one physical enumeration per unique directory.
   Anchored patterns self-root and ignore supplied roots. *Realized by a per-pattern

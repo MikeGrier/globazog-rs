@@ -12,6 +12,35 @@ End-of-milestone steps (repo standard, **not** listed as items): build the defau
 workspace debug+release with zero warnings; test the in-scope crate; sync with
 origin and push.
 
+## M11 — Root canonicalization & overlapping-root merge (D-35/D-37)
+
+The builder's `intern_root` currently deduplicates only **byte-for-byte-equal** root
+`PathBuf`s, so it does not yet realize D-35's owned lexical canonicalization nor
+D-37's "no directory enumerated twice" collapse. Two roots where one is an ancestor
+of the other (e.g. `.root("/tmp").root("/tmp/sub")`) enumerate the overlap twice and
+can double-emit matches; lexically-equivalent roots (`/tmp/x` vs `/tmp/./x`) also stay
+separate.
+
+- [ ] **M11-1. Decide overlapping-root semantics** (new decision refining D-35/D-37):
+  settle the owned lexical-canonicalization rules for roots (separator-fold; `.`-fold;
+  the `..` policy given D-26/D-35 reject-not-resolve; case-fold on Windows per D-28)
+  **and** how ancestor/descendant overlap composes with the D-38 relative-pattern
+  cross-product — specifically whether an overlapped directory is physically enumerated
+  once but matched under **multiple** `(root, root-relative)` frames, or the descendant
+  root is dropped (which changes the emitted paths / root indices). Record the decision
+  in [DESIGN-NOTES.md](DESIGN-NOTES.md) before coding. **Blocked on** a design decision
+  (it changes public output semantics) — raise with the user, do not pick silently.
+
+- [ ] **M11-2. Owned lexical root canonicalization**: implement the D-35 canonical form
+  in the utility layer and dedup roots on it per M11-1 (so `/tmp/x` ≡ `/tmp/./x`, and
+  separator/case-equivalents merge). Builder unit tests for each rule.
+
+- [ ] **M11-3. Ancestor/descendant traversal merge**: per M11-1, enumerate each unique
+  physical directory once while preserving every applicable `(root, rel)` frame, so an
+  overlapped subtree is neither scanned nor emitted twice (D-37). Integration test:
+  `.root(a).root(a/sub)` with a relative pattern enumerates the overlap once with the
+  agreed match set. Ends the milestone (implicit build/test/sync gate follows).
+
 ## M7+ — Engine follow-ups (parked, gated beyond completed M7)
 
 These are **parked, not pending**: milestone M7 is complete and archived in
