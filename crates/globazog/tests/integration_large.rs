@@ -285,4 +285,9 @@ fn unopenable_root_terminates_with_failed() {
     assert_eq!(count(&items, |i| matches!(i, CqItem::Error(_))), 1);
     assert_eq!(enters(&items), 1);
     assert_eq!(ends(&items), 1);
+    // The causing error lands immediately before the terminal (D-71), not separated
+    // from it by the root ContainerEnd or another worker's items.
+    let n = items.len();
+    assert!(matches!(items[n - 2], CqItem::Error(_)));
+    assert!(matches!(&items[n - 1], CqItem::Terminal(t) if t.reason == TerminalReason::Failed));
 }

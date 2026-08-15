@@ -77,6 +77,9 @@ struct Engine {
     cancel: AtomicBool,
     /// Set when a fatal error stops the walk (D-71); makes the terminal `Failed`.
     fatal: AtomicBool,
+    /// The causing error of a fatal termination, handed to the coordinator so it is
+    /// emitted immediately before `Terminal{Failed}` (D-71). First fatal wins.
+    fatal_error: Mutex<Option<CqError>>,
     finished: AtomicBool,
     ids: IdSpace,
 }
@@ -209,17 +212,23 @@ impl Engine {
         let scan = match sys::enumerate(&job.dir) {
             Ok(scan) => scan,
             Err(err) => {
-                let is_root = job.parent.is_none();
-                self.emit(CqItem::Error(CqError {
+                let cq_err = CqError {
                     container: Some(job.container),
                     error: EntryError { source: err },
-                }));
-                self.emit_ends(self.release(job.container));
-                // A root that cannot even be enumerated is fatal: stop the walk so
-                // the coordinator emits Terminal{Failed} (D-71). A failure below the
-                // root stays per-container and the walk continues (D-53).
-                if is_root {
-                    self.request_fatal();
+                };
+                if job.parent.is_none() {
+                    // A root that cannot be enumerated is fatal (D-71). Close the
+                    // root container for balance, then hand the error to the
+                    // coordinator so it lands immediately before Terminal{Failed}
+                    // rather than being separated from it by this ContainerEnd or
+                    // by another worker's items.
+                    self.emit_ends(self.release(job.container));
+                    self.request_fatal(cq_err);
+                } else {
+                    // Below the root: a per-directory failure is surfaced and the
+                    // walk continues (D-53).
+                    self.emit(CqItem::Error(cq_err));
+                    self.emit_ends(self.release(job.container));
                 }
                 return;
             }
@@ -297,10 +306,16 @@ impl Engine {
         }
     }
 
-    /// Trigger a fatal termination (D-71): stop the walk exactly like a cancel, but
-    /// mark it fatal so the coordinator emits `Terminal{Failed}`. The causing error
-    /// must already have been emitted (this sets `cancel`, after which `emit` bails).
-    fn request_fatal(&self) {
+    /// Trigger a fatal termination (D-71): stash the causing error for the
+    /// coordinator to emit immediately before `Terminal{Failed}`, then stop the walk
+    /// exactly like a cancel. First fatal wins; the error is not emitted here.
+    fn request_fatal(&self, err: CqError) {
+        {
+            let mut slot = self.fatal_error.lock().unwrap();
+            if slot.is_none() {
+                *slot = Some(err);
+            }
+        }
         self.fatal.store(true, Ordering::Release);
         self.request_cancel();
     }
@@ -413,6 +428,7 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
         work_cv: Condvar::new(),
         cancel: AtomicBool::new(false),
         fatal: AtomicBool::new(false),
+        fatal_error: Mutex::new(None),
         finished: AtomicBool::new(false),
         ids,
     });
@@ -442,6 +458,12 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
             } else {
                 TerminalReason::Completed
             };
+            // On a fatal termination emit the causing error last, immediately before
+            // the terminal, so the D-71 ordering contract holds regardless of what
+            // the workers enqueued (all have joined by now).
+            if let Some(err) = e.fatal_error.lock().unwrap().take() {
+                e.ring.push_blocking(CqItem::Error(err));
+            }
             // Terminal lands after all queued items (FIFO, D-61); block until the
             // client (or the drop-drain) makes room.
             e.ring.push_blocking(CqItem::Terminal(Terminal { reason }));
