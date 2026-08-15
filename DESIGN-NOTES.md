@@ -117,8 +117,10 @@ Last updated: 2026-08-14.
 - **D-52. No default reparse follow policy.** The client decides via submitted
   policy (which sees reparse status, D-13); the library never auto-follows.
   Realized by the `FollowLinks` option, **D-72**. (Resolves O-13.)
-- **D-53. Errors are surfaced as items in the output stream**, never aborting the
-  walk (e.g. a permission-denied subtree becomes an error item). (Resolves O-14.)
+- **D-53. Errors are surfaced as items in the output stream** — **refined by D-71:
+  a fatal subset (an unopenable root) ends the walk with `Terminal{Failed}`** —
+  otherwise never aborting the walk (e.g. a permission-denied subtree becomes an
+  error item). (Resolves O-14.)
   A **fatal** subset (a root that cannot be enumerated at all) instead stops the walk
   with a `Terminal{Failed}` acknowledgement — see **D-71**.
 
@@ -482,7 +484,9 @@ escaping that follows.
   may change at runtime. Backpressure closes the loop: the ring is **bounded, no
   drops** — when full the engine suspends continuations (D-11); the client's drain
   rate is the throttle. (Resolves O-C.)
-- **D-61. Cancellation = an SQ submission, acked by a terminal CQ marker.** Cancel
+- **D-61. Cancellation = an SQ submission, acked by a terminal CQ marker.**
+  **Extended by D-71: a fatal error also terminates via this same terminal-marker
+  path, as `Terminal{Failed}`.** Cancel
   is a small **submission** (io_uring `ASYNC_CANCEL`-style), **not** a ring-level
   flag or out-of-band bit. It triggers the D-50 drain and is acknowledged by a
   **terminal CQ marker that lands *after* all CQ items already enqueued** (FIFO) —
