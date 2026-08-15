@@ -85,11 +85,24 @@ impl DirEntry {
     }
 }
 
+/// The result of enumerating one directory (D-53): the entries that were read
+/// successfully, plus any per-entry failures encountered while reading their
+/// metadata. A failure on one entry never discards its siblings — the outer
+/// `io::Result::Err` is reserved for a directory-open/read failure that yields no
+/// usable listing at all.
+pub struct DirScan {
+    /// The entries read successfully, with inline metadata.
+    pub entries: Vec<DirEntry>,
+    /// Per-entry metadata failures (e.g. an entry removed or made unstatable between
+    /// listing and stat). Empty on the Windows backend, whose listing is inline.
+    pub entry_errors: Vec<io::Error>,
+}
+
 /// Enumerate one directory, dispatching to the platform's native backend where one
 /// exists (Windows `NtQueryDirectoryFile`, Linux `getdents64`+`statx`) and falling
 /// back to the portable [`enumerate_dir`] elsewhere. This is what the engine calls
 /// (D-4, D-6), so the native inline metadata / birth-time value flows through.
-pub fn enumerate(path: &Path) -> io::Result<Vec<DirEntry>> {
+pub fn enumerate(path: &Path) -> io::Result<DirScan> {
     #[cfg(windows)]
     {
         win::enumerate_dir_native(path)
@@ -105,36 +118,50 @@ pub fn enumerate(path: &Path) -> io::Result<Vec<DirEntry>> {
 }
 
 /// Enumerate one directory's entries with inline metadata (the portable backend).
-/// Symlink-aware: entry metadata is read without following symlinks.
-pub fn enumerate_dir(path: &Path) -> io::Result<Vec<DirEntry>> {
-    let mut out = Vec::new();
+/// Symlink-aware: entry metadata is read without following symlinks. A single
+/// entry's metadata failure is collected into [`DirScan::entry_errors`] rather than
+/// aborting the whole directory (D-53).
+pub fn enumerate_dir(path: &Path) -> io::Result<DirScan> {
+    let mut entries = Vec::new();
+    let mut entry_errors = Vec::new();
     for entry in fs::read_dir(path)? {
-        let entry = entry?;
-        let ft = entry.file_type()?;
-        let md = entry.metadata()?; // does not traverse symlinks
-        let (attributes, is_reparse, file_id, ctime) = platform_extra(&md, &ft);
-        let entry_type = if ft.is_dir() {
-            EntryType::Dir
-        } else if ft.is_file() {
-            EntryType::File
-        } else {
-            EntryType::Other
-        };
-        out.push(DirEntry {
-            name: decode_name(&entry.file_name()),
-            entry_type,
-            is_reparse,
-            reparse_tag: 0,
-            attributes,
-            size: md.len(),
-            btime: nanos(md.created()),
-            mtime: nanos(md.modified()),
-            atime: nanos(md.accessed()),
-            ctime,
-            file_id,
-        });
+        match read_one_entry(entry) {
+            Ok(e) => entries.push(e),
+            Err(err) => entry_errors.push(err),
+        }
     }
-    Ok(out)
+    Ok(DirScan {
+        entries,
+        entry_errors,
+    })
+}
+
+/// Read one portable-backend entry with its (symlink-non-following) metadata.
+fn read_one_entry(entry: io::Result<fs::DirEntry>) -> io::Result<DirEntry> {
+    let entry = entry?;
+    let ft = entry.file_type()?;
+    let md = entry.metadata()?; // does not traverse symlinks
+    let (attributes, is_reparse, file_id, ctime) = platform_extra(&md, &ft);
+    let entry_type = if ft.is_dir() {
+        EntryType::Dir
+    } else if ft.is_file() {
+        EntryType::File
+    } else {
+        EntryType::Other
+    };
+    Ok(DirEntry {
+        name: decode_name(&entry.file_name()),
+        entry_type,
+        is_reparse,
+        reparse_tag: 0,
+        attributes,
+        size: md.len(),
+        btime: nanos(md.created()),
+        mtime: nanos(md.modified()),
+        atime: nanos(md.accessed()),
+        ctime,
+        file_id,
+    })
 }
 
 /// Nanoseconds since the Unix epoch, sign-preserving and saturating (0 when the

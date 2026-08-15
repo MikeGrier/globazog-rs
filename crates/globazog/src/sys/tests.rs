@@ -45,7 +45,7 @@ fn enumerate_temp_tree() {
     }
 
     // Top level: exactly the 10 directories.
-    let top = enumerate_dir(root.path()).unwrap();
+    let top = enumerate_dir(root.path()).unwrap().entries;
     let dirs = top
         .iter()
         .filter(|e| e.entry_type == EntryType::Dir)
@@ -59,7 +59,7 @@ fn enumerate_temp_tree() {
             continue;
         }
         let name: String = e.name.iter().filter_map(|&c| char::from_u32(c)).collect();
-        let sub = enumerate_dir(&root.path().join(name)).unwrap();
+        let sub = enumerate_dir(&root.path().join(name)).unwrap().entries;
         for s in &sub {
             if s.entry_type == EntryType::File {
                 files += 1;
@@ -76,7 +76,7 @@ fn enumerate_temp_tree() {
 fn meta_view_matches_entry() {
     let root = tempfile::tempdir().unwrap();
     fs::write(root.path().join("a.txt"), b"hello").unwrap();
-    let entries = enumerate_dir(root.path()).unwrap();
+    let entries = enumerate_dir(root.path()).unwrap().entries;
     let e = entries
         .iter()
         .find(|e| e.entry_type == EntryType::File)
@@ -101,8 +101,8 @@ fn native_matches_portable_and_has_file_ids() {
         }
     }
 
-    let portable = enumerate_dir(root.path()).unwrap();
-    let native = enumerate_dir_native(root.path()).unwrap();
+    let portable = enumerate_dir(root.path()).unwrap().entries;
+    let native = enumerate_dir_native(root.path()).unwrap().entries;
 
     // Same set of top-level directory names (both skip `.` / `..`).
     let mut pn: Vec<Vec<u32>> = portable.iter().map(|e| e.name.clone()).collect();
@@ -120,7 +120,9 @@ fn native_matches_portable_and_has_file_ids() {
     );
 
     // Native file sizes are read inline (D-13).
-    let files = enumerate_dir_native(&root.path().join("dir0")).unwrap();
+    let files = enumerate_dir_native(&root.path().join("dir0"))
+        .unwrap()
+        .entries;
     let file_sizes: Vec<u64> = files
         .iter()
         .filter(|e| e.entry_type == EntryType::File)
@@ -144,8 +146,8 @@ fn native_linux_matches_portable_and_has_file_ids() {
         }
     }
 
-    let portable = enumerate_dir(root.path()).unwrap();
-    let native = enumerate_dir_native(root.path()).unwrap();
+    let portable = enumerate_dir(root.path()).unwrap().entries;
+    let native = enumerate_dir_native(root.path()).unwrap().entries;
 
     // Same set of top-level directory names (both skip `.` / `..`).
     let mut pn: Vec<Vec<u32>> = portable.iter().map(|e| e.name.clone()).collect();
@@ -168,7 +170,9 @@ fn native_linux_matches_portable_and_has_file_ids() {
     assert_eq!(pids, nids);
 
     // Native file sizes and modification times come from statx (D-13).
-    let files = enumerate_dir_native(&root.path().join("dir0")).unwrap();
+    let files = enumerate_dir_native(&root.path().join("dir0"))
+        .unwrap()
+        .entries;
     let regular: Vec<_> = files
         .iter()
         .filter(|e| e.entry_type == EntryType::File)
@@ -187,7 +191,7 @@ fn native_linux_reports_symlinks_without_following() {
     fs::write(root.path().join("target.txt"), b"payload").unwrap();
     std::os::unix::fs::symlink("target.txt", root.path().join("link")).unwrap();
 
-    let native = enumerate_dir_native(root.path()).unwrap();
+    let native = enumerate_dir_native(root.path()).unwrap().entries;
     let link = native
         .iter()
         .find(|e| e.name == crate::syntax::decode::decode_bytes(b"link"))

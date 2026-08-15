@@ -272,7 +272,7 @@ not drop its readable siblings (a bug against the *existing* D-53 per-entry cont
 "stopped due to error" notification (a new capability; `TerminalReason` has only
 `Completed`/`Cancelled` today). Sequenced A → B.
 
-- [ ] **M9-1. Per-entry failures don't abort a directory** (D-53): introduce
+- [x] **M9-1. Per-entry failures don't abort a directory** (D-53): introduce
   `sys::DirScan { entries: Vec<DirEntry>, entry_errors: Vec<io::Error> }` returned by
   `enumerate` / `enumerate_dir` and the native backends. Per-entry `file_type` /
   `metadata` / `statx` failures are collected into `entry_errors` instead of aborting

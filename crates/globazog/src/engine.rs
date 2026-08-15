@@ -204,8 +204,8 @@ impl Engine {
             return;
         }
 
-        let entries = match sys::enumerate(&job.dir) {
-            Ok(entries) => entries,
+        let scan = match sys::enumerate(&job.dir) {
+            Ok(scan) => scan,
             Err(err) => {
                 self.emit(CqItem::Error(CqError {
                     container: Some(job.container),
@@ -215,6 +215,9 @@ impl Engine {
                 return;
             }
         };
+        // Per-entry failures (M9-2) and the fatal-root terminal (M9-3) consume
+        // `scan.entry_errors`; for now the readable entries drive the walk.
+        let entries = scan.entries;
 
         let rel_slices: Vec<&[CodePoint]> = job.rel.iter().map(|s| s.as_slice()).collect();
         let depth = job.rel.len() as u32;

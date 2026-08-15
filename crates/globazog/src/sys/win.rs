@@ -9,7 +9,7 @@
 //! currently opens the supplied path directly, and the enumeration works on any
 //! directory handle.
 
-use super::{DirEntry, FileId};
+use super::{DirEntry, DirScan, FileId};
 use crate::predicate::EntryType;
 use crate::syntax::decode;
 use std::io;
@@ -29,7 +29,9 @@ use windows_sys::Win32::Storage::FileSystem::{
 const FILETIME_TO_UNIX_100NS: i64 = 116_444_736_000_000_000;
 
 /// Enumerate one directory natively, returning entries with full inline metadata.
-pub fn enumerate_dir_native(path: &Path) -> io::Result<Vec<DirEntry>> {
+/// The listing is inline, so there are no per-entry metadata failures to collect
+/// ([`DirScan::entry_errors`] is always empty).
+pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
     let dir = open_dir(path)?;
     let raw = dir.as_raw_handle() as HANDLE;
     let volume = volume_serial(raw)?;
@@ -84,7 +86,10 @@ pub fn enumerate_dir_native(path: &Path) -> io::Result<Vec<DirEntry>> {
             offset += rec.NextEntryOffset as usize;
         }
     }
-    Ok(out)
+    Ok(DirScan {
+        entries: out,
+        entry_errors: Vec::new(),
+    })
 }
 
 fn open_dir(path: &Path) -> io::Result<std::fs::File> {

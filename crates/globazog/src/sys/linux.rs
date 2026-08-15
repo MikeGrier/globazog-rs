@@ -12,7 +12,7 @@
 //! Linux `getdents64` yields only name + `d_type` + `d_ino`, so size/timestamps
 //! require a per-entry `statx` — the platform reality (D-6), not a design choice.
 
-use super::{DirEntry, FileId};
+use super::{DirEntry, DirScan, FileId};
 use crate::predicate::EntryType;
 use crate::syntax::decode;
 use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Statx, StatxFlags};
@@ -20,8 +20,11 @@ use std::ffi::CStr;
 use std::io;
 use std::path::Path;
 
-/// Enumerate one directory natively, returning entries with full stat metadata.
-pub fn enumerate_dir_native(path: &Path) -> io::Result<Vec<DirEntry>> {
+/// Enumerate one directory natively, returning entries with full stat metadata. A
+/// per-entry `statx` failure (e.g. an entry removed between `getdents64` and `statx`)
+/// is collected into [`DirScan::entry_errors`] rather than aborting the directory
+/// (D-53).
+pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
     let dirfd = fs::open(
         path,
         OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
@@ -48,12 +51,18 @@ pub fn enumerate_dir_native(path: &Path) -> io::Result<Vec<DirEntry>> {
         | StatxFlags::CTIME
         | StatxFlags::BTIME;
 
-    let mut out = Vec::with_capacity(names.len());
+    let mut entries = Vec::with_capacity(names.len());
+    let mut entry_errors = Vec::new();
     for name in &names {
-        let st = fs::statx(&dirfd, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW, mask)?;
-        out.push(make_entry(name, &st));
+        match fs::statx(&dirfd, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW, mask) {
+            Ok(st) => entries.push(make_entry(name, &st)),
+            Err(err) => entry_errors.push(io::Error::from(err)),
+        }
     }
-    Ok(out)
+    Ok(DirScan {
+        entries,
+        entry_errors,
+    })
 }
 
 fn make_entry(name: &CStr, st: &Statx) -> DirEntry {
