@@ -44,16 +44,22 @@ impl Signal {
     /// Block until signaled or `timeout` elapses; returns whether it was signaled.
     /// Used for cancel-responsive backpressure waits (D-11): a parked producer
     /// re-checks the cancel flag each time the wait returns.
+    ///
+    /// `Condvar` may wake spuriously, so the wait is a predicate loop
+    /// (`wait_timeout_while`) that only returns early on a real signal; a `false`
+    /// result therefore means the full `timeout` elapsed, never a spurious wake.
     pub fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
-        let mut set = self.set.lock().unwrap();
+        let set = self.set.lock().unwrap();
+        let (mut set, _res) = self
+            .cv
+            .wait_timeout_while(set, timeout, |signaled| !*signaled)
+            .unwrap();
         if *set {
             *set = false;
-            return true;
+            true
+        } else {
+            false
         }
-        let (mut set, _) = self.cv.wait_timeout(set, timeout).unwrap();
-        let was = *set;
-        *set = false;
-        was
     }
 
     /// Consume and return the current signal without blocking.
