@@ -460,7 +460,19 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
         open: HashMap::new(),
         visited: HashSet::new(),
     };
+    // Seed only roots that some pattern actually applies to (D-38): a supplied root
+    // with no applicable pattern (e.g. an anchored-only query) is never walked, so an
+    // unrelated bad supplied root cannot fail an otherwise-valid anchored traversal.
+    let mut referenced = vec![false; query.roots.len()];
+    for p in &query.patterns {
+        for &r in &p.roots {
+            referenced[r] = true;
+        }
+    }
     for (i, root) in query.roots.iter().enumerate() {
+        if !referenced[i] {
+            continue;
+        }
         let cid = ids.next_container();
         shared.containers.insert(
             cid,

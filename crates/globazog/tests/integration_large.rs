@@ -395,3 +395,24 @@ fn anchored_pattern_does_not_cross_apply_to_other_roots() {
     assert_eq!(matches(&items), 1);
     assert_eq!(terminal(&items), TerminalReason::Completed);
 }
+
+#[cfg(unix)]
+#[test]
+fn unreferenced_missing_root_is_not_scheduled() {
+    // A supplied root that no pattern applies to must not be walked (D-38), so a
+    // bogus/unrelated supplied root cannot fail an otherwise-valid anchored traversal
+    // with `Failed`.
+    let b = tempfile::tempdir().unwrap();
+    fs::write(b.path().join("bar.conf"), b"x").unwrap();
+    let missing = b.path().join("does-not-exist"); // a bogus explicit root
+
+    let bpat = format!("{}/*.conf", b.path().display());
+    let handle = QueryBuilder::new()
+        .root(&missing) // unreferenced: only the anchored pattern (rooted at `b`) applies
+        .pattern(&bpat, Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(matches(&items), 1);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+}
