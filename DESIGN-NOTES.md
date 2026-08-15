@@ -544,7 +544,13 @@ escaping that follows.
     cascades upward under the state lock, collecting the zero-hitting containers,
     then emits their `ContainerEnd`s **outside** the lock (never hold the state lock
     across a ring push). This yields bottom-up ends and enter-before-children by
-    construction.
+    construction. **The 1:1 enter/end guarantee holds even under cancellation/fatal
+    error:** a container is tracked as *open* the moment its `ContainerEnter` is
+    emitted; ends are emitted cancel-immune (`push_blocking`) and idempotently (guarded
+    by the open-set), and after the workers join the coordinator closes any container
+    still open — including a subtree the cancel abandoned before its refcount reached
+    zero — bottom-up, *before* the terminal. So a client never reaches the terminal
+    with a live container.
   - **Unified suspension (D-59) = worker-thread blocking.** Both I/O wait (the
     enumeration syscall) and output backpressure (a full ring) suspend the *worker
     thread* — the thread *is* the continuation in the sync model. Backpressure uses

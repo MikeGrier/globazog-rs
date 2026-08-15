@@ -43,7 +43,9 @@
 //!   carries the requested [size / timestamps / type](EntryMetaOwned).
 //! - [`CqItem::ContainerEnter`] / [`CqItem::ContainerEnd`] — a directory scan
 //!   started / its subtree finished. Ends cascade bottom-up and are 1:1 with their
-//!   enters; an enter always precedes any `Match` or child that references it.
+//!   enters — every enter gets an end before the terminal, **including on
+//!   cancellation or a fatal error** — and an enter always precedes any `Match` or
+//!   child that references it.
 //! - [`CqItem::Error`] — a per-entry or per-directory failure (e.g. permission
 //!   denied, or an entry that vanished mid-scan); the walk continues past it (D-53).
 //!   A single unreadable entry never discards its readable siblings.

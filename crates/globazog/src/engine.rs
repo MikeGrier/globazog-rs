@@ -62,6 +62,11 @@ struct Shared {
     cancelled: bool,
     /// Live container accounting.
     containers: HashMap<ContainerId, ContainerState>,
+    /// Containers whose `ContainerEnter` has been emitted but whose `ContainerEnd`
+    /// has not yet been — keyed to depth for bottom-up teardown ordering. Every
+    /// entry here is closed before the terminal, so the 1:1 enter/end guarantee holds
+    /// even for a subtree abandoned by cancellation (D-64).
+    open: HashMap<ContainerId, u32>,
     /// File ids of reparse dirs already descended, for cycle detection (D-51).
     visited: HashSet<FileId>,
 }
@@ -199,15 +204,25 @@ impl Engine {
     /// Scan one directory: enter, enumerate, emit matches, launch descendants, and
     /// finalize the refcount (emitting any resulting ends).
     fn process(&self, job: ScanJob) {
+        let depth = job.rel.len() as u32;
         if !self.emit(CqItem::ContainerEnter(ContainerEnter {
             id: job.container,
             parent: job.parent,
             name: job.name.clone(),
         })) {
-            // Cancelled during teardown: still release accounting; skip end emits.
-            let _ = self.release(job.container);
+            // Cancelled before this enter was emitted: no enter, so no end is owed
+            // for this container — but release its accounting so already-entered
+            // ancestors that reach zero still get their (mandatory) ends.
+            self.emit_ends(self.release(job.container));
             return;
         }
+        // The enter is out; this container now owes an end, emitted no later than the
+        // coordinator's teardown (even under cancellation).
+        self.shared
+            .lock()
+            .unwrap()
+            .open
+            .insert(job.container, depth);
 
         let scan = match sys::enumerate(&job.dir) {
             Ok(scan) => scan,
@@ -244,7 +259,6 @@ impl Engine {
         let entries = scan.entries;
 
         let rel_slices: Vec<&[CodePoint]> = job.rel.iter().map(|s| s.as_slice()).collect();
-        let depth = job.rel.len() as u32;
 
         for entry in &entries {
             if self.cancel.load(Ordering::Acquire) {
@@ -309,9 +323,20 @@ impl Engine {
         sh.visited.insert(entry.file_id)
     }
 
+    /// Emit `id`'s `ContainerEnd` exactly once and cancel-immune (D-64): the end is
+    /// mandatory, so it uses `push_blocking` and is guarded by the `open` set, which
+    /// makes it idempotent — a worker and the coordinator can never double-emit it.
+    fn emit_end(&self, id: ContainerId) {
+        let owed = self.shared.lock().unwrap().open.remove(&id).is_some();
+        if owed {
+            self.ring
+                .push_blocking(CqItem::ContainerEnd(ContainerEnd { id }));
+        }
+    }
+
     fn emit_ends(&self, ends: Vec<ContainerId>) {
         for id in ends {
-            self.emit(CqItem::ContainerEnd(ContainerEnd { id }));
+            self.emit_end(id);
         }
     }
 
@@ -407,6 +432,7 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
         outstanding: 0,
         cancelled: false,
         containers: HashMap::new(),
+        open: HashMap::new(),
         visited: HashSet::new(),
     };
     for (i, root) in query.roots.iter().enumerate() {
@@ -459,6 +485,17 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
         std::thread::spawn(move || {
             for w in workers {
                 let _ = w.join();
+            }
+            // Close any container still open (e.g. a subtree abandoned by
+            // cancellation): the 1:1 ContainerEnter/ContainerEnd guarantee must hold
+            // before the terminal (D-64). Deepest-first gives bottom-up ends.
+            let mut leftovers: Vec<(ContainerId, u32)> = {
+                let sh = e.shared.lock().unwrap();
+                sh.open.iter().map(|(&id, &d)| (id, d)).collect()
+            };
+            leftovers.sort_by_key(|&(_, depth)| std::cmp::Reverse(depth));
+            for (id, _) in leftovers {
+                e.emit_end(id);
             }
             let reason = if e.fatal.load(Ordering::Acquire) {
                 TerminalReason::Failed

@@ -326,3 +326,46 @@ fn symlinked_dir_followed_only_with_follow_always() {
     assert_eq!(matches(&items), 2);
     assert_eq!(terminal(&items), TerminalReason::Completed);
 }
+
+#[test]
+fn cancellation_still_balances_container_ends() {
+    // Even when cancelled mid-flight, every `ContainerEnter` must get a
+    // `ContainerEnd` before the terminal (D-64) — a client must never reach the
+    // terminal with live (unclosed) containers.
+    let root = tempfile::tempdir().unwrap();
+    for d in 0..30 {
+        let dir = root.path().join(format!("d{d:02}"));
+        fs::create_dir(&dir).unwrap();
+        for s in 0..5 {
+            let sub = dir.join(format!("s{s}"));
+            fs::create_dir(&sub).unwrap();
+            fs::write(sub.join("f.dat"), b"x").unwrap();
+        }
+    }
+
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .pattern("**/*.dat", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    handle.cancel();
+    let items = drain(&handle);
+
+    let mut enter_ids = Vec::new();
+    let mut end_ids = Vec::new();
+    for i in &items {
+        match i {
+            CqItem::ContainerEnter(e) => enter_ids.push(e.id),
+            CqItem::ContainerEnd(e) => end_ids.push(e.id),
+            _ => {}
+        }
+    }
+    enter_ids.sort();
+    end_ids.sort();
+    // Same multiset: every enter has exactly one end and vice versa.
+    assert_eq!(enter_ids, end_ids);
+    assert!(matches!(
+        terminal(&items),
+        TerminalReason::Cancelled | TerminalReason::Completed
+    ));
+}
