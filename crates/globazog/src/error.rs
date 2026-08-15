@@ -16,6 +16,10 @@ pub enum Error {
     #[error("invalid pattern: {0}")]
     Pattern(String),
 
+    /// An execution option was invalid (e.g. a zero `ring_capacity`).
+    #[error("invalid option: {0}")]
+    Options(String),
+
     /// An I/O failure while establishing the query (e.g. opening a root).
     #[error("i/o error: {0}")]
     Io(#[from] std::io::Error),

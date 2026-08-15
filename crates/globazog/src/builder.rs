@@ -263,8 +263,18 @@ impl QueryBuilder {
         if self.patterns.is_empty() {
             return Err(Error::Pattern("query has no patterns".into()));
         }
+        // A zero-capacity ring would panic in `CompletionRing::with_capacity`; reject
+        // it here so bad options surface as a `Result`, not a crash in `submit`.
+        if self.options.ring_capacity == 0 {
+            return Err(Error::Options("ring_capacity must be non-zero".into()));
+        }
 
-        let mut roots: Vec<Root> = self.roots.iter().cloned().map(Root::new).collect();
+        // Dedup supplied roots so `.root(p).root(p)` scans the tree once and matches
+        // are not double-emitted (D-37).
+        let mut roots: Vec<Root> = Vec::new();
+        for r in &self.roots {
+            intern_root(&mut roots, Root::new(r.clone()));
+        }
         let explicit_roots = roots.len();
         let mut patterns: Vec<PatternEntry> = Vec::new();
         let mut has_relative = false;
@@ -296,8 +306,7 @@ impl QueryBuilder {
                 // A self-rooting (anchored) pattern applies only to its own derived
                 // root, never the supplied roots (D-38).
                 other => {
-                    let (root, relative) =
-                        lower_self_rooting(other, parsed.pattern, &self.base, pend.dialect)?;
+                    let (root, relative) = lower_self_rooting(other, parsed.pattern, &self.base)?;
                     let idx = intern_root(&mut roots, root);
                     (relative, other, vec![idx])
                 }
@@ -367,22 +376,31 @@ fn lower_self_rooting(
     anchor: Anchor,
     pattern: Pattern,
     base: &Option<PathBuf>,
-    dialect: Dialect,
 ) -> Result<(Root, Pattern), Error> {
     let mut root = match anchor {
         Anchor::Root => {
-            // A leading separator. With a base, root at the base's filesystem root.
-            // Without a base: a `win` leading separator is current-drive-relative
-            // (process-global state we refuse to read, D-32/D-35), so reject it; a
-            // posix `/` is an honest absolute root that needs none.
+            // A leading separator resolves to a filesystem root only where the host has
+            // an unambiguous one. With a base, that base must be absolute — a relative
+            // base would be resolved via the current directory, a process global we
+            // refuse to read (D-32/D-35). With no base, a posix host roots at `/`, but
+            // on Windows a leading separator is current-drive-relative, so an absolute
+            // base is required there regardless of dialect.
             match base {
-                Some(b) => root_of(b),
-                None => {
-                    if dialect == Dialect::Win {
+                Some(b) => {
+                    if !b.is_absolute() {
                         return Err(Error::Pattern(
-                            "a leading-separator `win` pattern is current-drive-relative \
-                             and needs a per-drive base; supply one with `.base(...)` \
-                             (D-32)"
+                            "a base for a leading-separator pattern must be an absolute \
+                             path (D-32)"
+                                .into(),
+                        ));
+                    }
+                    root_of(b)
+                }
+                None => {
+                    if cfg!(windows) {
+                        return Err(Error::Pattern(
+                            "a leading-separator pattern is current-drive-relative on \
+                             Windows; supply an absolute `.base(...)` (D-32)"
                                 .into(),
                         ));
                     }

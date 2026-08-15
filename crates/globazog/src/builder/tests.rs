@@ -38,6 +38,7 @@ fn empty_query_errors() {
     assert!(matches!(err, Error::Pattern(_)));
 }
 
+#[cfg(unix)]
 #[test]
 fn posix_absolute_pattern_peels_literal_prefix_into_root() {
     let q = QueryBuilder::new()
@@ -52,6 +53,7 @@ fn posix_absolute_pattern_peels_literal_prefix_into_root() {
     assert_eq!(q.patterns[0].glob.anchor, Anchor::Root);
 }
 
+#[cfg(unix)]
 #[test]
 fn posix_absolute_stops_peeling_at_first_wildcard() {
     let q = QueryBuilder::new()
@@ -63,6 +65,7 @@ fn posix_absolute_stops_peeling_at_first_wildcard() {
     assert_eq!(q.patterns[0].glob.pattern.segments.len(), 3);
 }
 
+#[cfg(unix)]
 #[test]
 fn posix_absolute_all_literal_keeps_final_segment() {
     let q = QueryBuilder::new()
@@ -105,6 +108,7 @@ fn query_level_default_case_applies_when_pattern_gives_none() {
     assert_eq!(q.patterns[0].glob.case, CaseSensitivity::Insensitive);
 }
 
+#[cfg(unix)]
 #[test]
 fn duplicate_derived_roots_are_deduped() {
     let q = QueryBuilder::new()
@@ -116,6 +120,7 @@ fn duplicate_derived_roots_are_deduped() {
     assert_eq!(q.patterns.len(), 2);
 }
 
+#[cfg(unix)]
 #[test]
 fn anchored_pattern_scopes_to_its_own_root_only() {
     let q = QueryBuilder::new()
@@ -213,4 +218,42 @@ fn win_dialect_unsupported_off_windows() {
         .build()
         .unwrap_err();
     assert!(matches!(err, Error::Pattern(_)));
+}
+
+#[test]
+fn duplicate_supplied_roots_are_deduped() {
+    // `.root(p).root(p)` must scan the tree once, not twice (D-37).
+    let q = QueryBuilder::new()
+        .root("/data")
+        .root("/data")
+        .pattern("*.txt", Dialect::Posix, empty_emit())
+        .build()
+        .unwrap();
+    assert_eq!(q.roots, vec![Root::new("/data")]);
+    assert_eq!(q.patterns[0].roots, vec![0]);
+}
+
+#[test]
+fn zero_ring_capacity_is_rejected() {
+    let opts = Options {
+        ring_capacity: 0,
+        ..Options::default()
+    };
+    let r = QueryBuilder::new()
+        .root("/data")
+        .options(opts)
+        .pattern("*.txt", Dialect::Posix, empty_emit())
+        .build();
+    assert!(matches!(r, Err(Error::Options(_))));
+}
+
+#[test]
+fn relative_base_is_rejected() {
+    // A relative base would be resolved via the current directory (a process global);
+    // a leading-separator pattern must be given an absolute base (D-32).
+    let r = QueryBuilder::new()
+        .base("relative/dir")
+        .pattern("/foo/*.c", Dialect::Posix, empty_emit())
+        .build();
+    assert!(r.is_err());
 }
