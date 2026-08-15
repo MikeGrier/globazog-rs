@@ -266,14 +266,17 @@ impl Engine {
         }
         let entries = scan.entries;
 
-        let rel_slices: Vec<&[CodePoint]> = job.rel.iter().map(|s| s.as_slice()).collect();
+        // Reused across entries: the parent's relative slices plus one reserved slot
+        // for the current entry name. Each iteration only pushes/pops the leaf, so the
+        // depth-sized path vector is allocated once per directory, not per entry.
+        let mut path: Vec<&[CodePoint]> = job.rel.iter().map(|s| s.as_slice()).collect();
+        path.reserve_exact(1);
 
         for entry in &entries {
             if self.cancel.load(Ordering::Acquire) {
                 break;
             }
             let meta = entry.meta(depth);
-            let mut path = rel_slices.clone();
             path.push(&entry.name);
 
             // Emit: per-pattern glob match AND that pattern's emit conjunction (D-66).
@@ -320,6 +323,8 @@ impl Engine {
             {
                 self.launch_child(&job, entry);
             }
+
+            path.pop();
         }
 
         self.emit_ends(self.release(job.container));
