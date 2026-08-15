@@ -245,8 +245,24 @@ fn non_utf8_filename_is_enumerated_and_matched() {
         })
         .collect();
     assert_eq!(names.len(), 1);
-    // The invalid bytes survived decoding as surrogate-escaped code points (D-46).
-    assert!(names[0].name.code_points().len() >= "name.dat".len());
+    // The invalid bytes survived decoding as the exact PEP-383 surrogate-escaped code
+    // points (D-46), reversibly and in place: 0xff -> U+DCFF, 0xfe -> U+DCFE.
+    let expected: Vec<u32> = vec![
+        b'b' as u32,
+        b'a' as u32,
+        b'd' as u32,
+        0xDCFF,
+        0xDCFE,
+        b'n' as u32,
+        b'a' as u32,
+        b'm' as u32,
+        b'e' as u32,
+        b'.' as u32,
+        b'd' as u32,
+        b'a' as u32,
+        b't' as u32,
+    ];
+    assert_eq!(names[0].name.code_points(), expected.as_slice());
     assert_eq!(names[0].meta.size, 7);
 }
 
