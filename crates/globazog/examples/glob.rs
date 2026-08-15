@@ -54,28 +54,65 @@ fn main() {
             CqItem::ContainerEnter(_) => dirs += 1,
             CqItem::Error(_) => errors += 1,
             CqItem::Terminal(t) => {
-                let elapsed = started.elapsed();
-                println!("\n--- sample (first {} matches) ---", sample.len());
-                for line in &sample {
-                    println!("{line}");
-                }
-                println!("\n--- per-pattern counts ---");
-                for (p, count) in patterns.iter().zip(&per_pattern) {
-                    println!("{count:>10}  {p}");
-                }
                 let outcome = match t.reason {
                     TerminalReason::Completed => "completed",
                     TerminalReason::Cancelled => "cancelled",
                     TerminalReason::Failed => "failed",
                 };
-                println!(
-                    "\n{outcome}: {total} matches, {total_bytes} bytes, {dirs} dirs scanned, \
-                     {errors} errors, in {:.2}s",
-                    elapsed.as_secs_f64()
-                );
+                let report = Report {
+                    patterns: &patterns,
+                    per_pattern: &per_pattern,
+                    sample: &sample,
+                    total,
+                    total_bytes,
+                    dirs,
+                    errors,
+                    outcome,
+                    elapsed_secs: started.elapsed().as_secs_f64(),
+                };
+                let mut out = String::new();
+                report.render(&mut out);
+                print!("{out}");
                 break;
             }
             _ => {}
         }
+    }
+}
+
+/// One run's results, rendered independently of the destination (D-57). `render`
+/// writes to any text sink, so the report format is separable from stdout — the
+/// example emits it from a single site and it can be captured (e.g. into a `String`).
+struct Report<'a> {
+    patterns: &'a [String],
+    per_pattern: &'a [usize],
+    sample: &'a [String],
+    total: usize,
+    total_bytes: u64,
+    dirs: usize,
+    errors: usize,
+    outcome: &'a str,
+    elapsed_secs: f64,
+}
+
+impl Report<'_> {
+    fn render(&self, out: &mut impl std::fmt::Write) {
+        let _ = writeln!(
+            out,
+            "\n--- sample (first {} matches) ---",
+            self.sample.len()
+        );
+        for line in self.sample {
+            let _ = writeln!(out, "{line}");
+        }
+        let _ = writeln!(out, "\n--- per-pattern counts ---");
+        for (p, count) in self.patterns.iter().zip(self.per_pattern) {
+            let _ = writeln!(out, "{count:>10}  {p}");
+        }
+        let _ = writeln!(
+            out,
+            "\n{}: {} matches, {} bytes, {} dirs scanned, {} errors, in {:.2}s",
+            self.outcome, self.total, self.total_bytes, self.dirs, self.errors, self.elapsed_secs
+        );
     }
 }
