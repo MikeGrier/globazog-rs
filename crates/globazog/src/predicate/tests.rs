@@ -94,17 +94,19 @@ fn entry_type() {
 
 #[test]
 fn reparse_bool_and_tag() {
+    // IO_REPARSE_TAG_SYMLINK — the Windows manifest reparse tag for a symlink.
+    const IO_REPARSE_TAG_SYMLINK: u32 = 0xA000_000C;
     let n = cps("link");
     let m = EntryMeta {
         is_reparse: true,
-        reparse_tag: 0xA000_000C,
+        reparse_tag: IO_REPARSE_TAG_SYMLINK,
         ..meta(&n)
     };
     assert!(eval_leaf(&Leaf::IsReparse { negate: false }, &m));
     assert!(!eval_leaf(&Leaf::IsReparse { negate: true }, &m));
     assert!(eval_leaf(
         &Leaf::ReparseTag {
-            tag: 0xA000_000C,
+            tag: IO_REPARSE_TAG_SYMLINK,
             negate: false
         },
         &m
