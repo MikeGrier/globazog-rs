@@ -30,8 +30,6 @@ pub enum Error {
 /// exception is a *fatal* error (a root that cannot be enumerated): the engine wraps
 /// it in this type, emits it, and then ends the stream with `TerminalReason::Failed`
 /// (D-71), so a consumer should treat a following `Failed` terminal as "stop".
-///
-// The owning container is attached once the ring item types land (D-64).
 #[derive(Debug, Error)]
 #[error("entry error: {source}")]
 #[non_exhaustive]
