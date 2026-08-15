@@ -505,7 +505,8 @@ impl CompletionRing {
 }
 
 /// The submission queue (D-68): low-volume and asymmetric, so a mutex-guarded
-/// deque suffices for its three ops (D-66) — no lock-free ring needed.
+/// deque suffices for its two ops (`Cancel`, `DecisionAnswer`, D-66) — no lock-free
+/// ring needed.
 #[derive(Debug, Default)]
 pub struct SubmissionQueue {
     inner: Mutex<VecDeque<SqOp>>,
