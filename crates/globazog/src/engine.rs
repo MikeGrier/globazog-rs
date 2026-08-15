@@ -15,7 +15,7 @@
 
 use crate::builder::{FollowLinks, Query};
 use crate::error::EntryError;
-use crate::predicate::{EntryType, eval_all};
+use crate::predicate::{EntryType, MetaMask, eval_all};
 use crate::ring::{
     CompletionRing, ContainerEnd, ContainerEnter, ContainerId, ContainerName, CqError, CqItem,
     EntryMetaOwned, IdSpace, Match, Name, PatternMask, SqOp, SubmissionQueue, Terminal,
@@ -79,6 +79,10 @@ struct Engine {
     query: Query,
     patterns: PatternSet,
     fetch_mask: crate::predicate::MetaMask,
+    /// What each directory enumeration must fetch (D-62): stat-tier fields only when a
+    /// predicate/result-shape needs them, a file identity only when a followed reparse
+    /// point needs cycle detection.
+    enum_plan: sys::EnumPlan,
     ring: Arc<CompletionRing>,
     shared: Mutex<Shared>,
     work_cv: Condvar,
@@ -228,7 +232,7 @@ impl Engine {
             .open
             .insert(job.container, depth);
 
-        let scan = match sys::enumerate(&job.dir) {
+        let scan = match sys::enumerate(&job.dir, self.enum_plan) {
             Ok(scan) => scan,
             Err(err) => {
                 let cq_err = CqError {
@@ -433,6 +437,18 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
     let patterns =
         PatternSet::from_compiled(query.patterns.iter().map(|p| p.glob.clone()).collect());
     let fetch_mask = query.fetch_mask();
+    // The stat-tier fields require an actual stat; TYPE/REPARSE come from the listing.
+    let stat_mask = MetaMask::SIZE
+        | MetaMask::MTIME
+        | MetaMask::ATIME
+        | MetaMask::CTIME
+        | MetaMask::BTIME
+        | MetaMask::ATTRS;
+    let enum_plan = sys::EnumPlan {
+        want_stat: fetch_mask.intersects(stat_mask),
+        want_file_id: query.options.cycle_detection
+            && query.options.follow_links == FollowLinks::Always,
+    };
     let permits = query.options.permits.max(1);
     let ids = IdSpace::new();
 
@@ -468,6 +484,7 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
         query,
         patterns,
         fetch_mask,
+        enum_plan,
         ring,
         shared: Mutex::new(shared),
         work_cv: Condvar::new(),

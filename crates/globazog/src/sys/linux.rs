@@ -12,7 +12,7 @@
 //! Linux `getdents64` yields only name + `d_type` + `d_ino`, so size/timestamps
 //! require a per-entry `statx` — the platform reality (D-6), not a design choice.
 
-use super::{DirEntry, DirScan, FileId};
+use super::{DirEntry, DirScan, EnumPlan, FileId};
 use crate::predicate::EntryType;
 use crate::syntax::decode;
 use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Statx, StatxFlags};
@@ -25,15 +25,16 @@ use std::path::Path;
 /// or a late `getdents64` read error after some names were already read, is collected
 /// into [`DirScan::entry_errors`] rather than aborting the directory (D-53). The outer
 /// `Err` is reserved for a failure that yields no usable listing at all.
-pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
+pub fn enumerate_dir_native(path: &Path, plan: EnumPlan) -> io::Result<DirScan> {
     let dirfd = fs::open(
         path,
         OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
         Mode::empty(),
     )?;
 
-    // Read all names first (getdents advances the fd offset); statx afterwards.
-    let mut names: Vec<std::ffi::CString> = Vec::new();
+    // Read names + their `d_type` first (getdents advances the fd offset); statx
+    // afterwards only where the plan needs it.
+    let mut names: Vec<(std::ffi::CString, FileType)> = Vec::new();
     let mut entry_errors = Vec::new();
     let dir = Dir::read_from(&dirfd)?;
     for entry in dir {
@@ -54,7 +55,7 @@ pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
         if is_dot_entry(name) {
             continue;
         }
-        names.push(name.to_owned());
+        names.push((name.to_owned(), entry.file_type()));
     }
 
     let mask = StatxFlags::TYPE
@@ -66,7 +67,17 @@ pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
         | StatxFlags::BTIME;
 
     let mut entries = Vec::with_capacity(names.len());
-    for name in &names {
+    for (name, dtype) in &names {
+        // statx only when a stat-tier field is wanted, a file identity is needed for a
+        // symlink we might follow (D-51), or `d_type` is unknown and must be resolved
+        // to a type. Otherwise the listing's `d_type` is enough (D-62).
+        let need_stat = plan.want_stat
+            || (matches!(dtype, FileType::Symlink) && plan.want_file_id)
+            || matches!(dtype, FileType::Unknown);
+        if !need_stat {
+            entries.push(make_entry_from_dtype(name, *dtype));
+            continue;
+        }
         match fs::statx(&dirfd, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW, mask) {
             Ok(st) => entries.push(make_entry(name, &st)),
             Err(err) => entry_errors.push(io::Error::from(err)),
@@ -78,14 +89,37 @@ pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
     })
 }
 
-fn make_entry(name: &CStr, st: &Statx) -> DirEntry {
-    let file_type = FileType::from_raw_mode(u32::from(st.stx_mode));
-    let (entry_type, is_reparse) = match file_type {
+/// Map a `d_type` / `statx` file type to our entry type and reparse flag.
+fn classify(file_type: FileType) -> (EntryType, bool) {
+    match file_type {
         FileType::Directory => (EntryType::Dir, false),
         FileType::RegularFile => (EntryType::File, false),
         FileType::Symlink => (EntryType::Other, true),
         _ => (EntryType::Other, false),
-    };
+    }
+}
+
+/// Build an entry from the listing's `d_type` alone (no stat): type + reparse status
+/// are known; size / times / file id are left zero (D-62 lazy fetch).
+fn make_entry_from_dtype(name: &CStr, dtype: FileType) -> DirEntry {
+    let (entry_type, is_reparse) = classify(dtype);
+    DirEntry {
+        name: decode::decode_bytes(name.to_bytes()),
+        entry_type,
+        is_reparse,
+        reparse_tag: 0,
+        attributes: 0,
+        size: 0,
+        btime: 0,
+        mtime: 0,
+        atime: 0,
+        ctime: 0,
+        file_id: FileId { volume: 0, id: 0 },
+    }
+}
+
+fn make_entry(name: &CStr, st: &Statx) -> DirEntry {
+    let (entry_type, is_reparse) = classify(FileType::from_raw_mode(u32::from(st.stx_mode)));
     let volume = rustix::fs::makedev(st.stx_dev_major, st.stx_dev_minor);
     DirEntry {
         name: decode::decode_bytes(name.to_bytes()),

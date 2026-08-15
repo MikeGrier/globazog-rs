@@ -86,6 +86,14 @@ Last updated: 2026-08-14.
   references a `statx`-tier field (size / timestamps / sometimes type or reparse).
   Never stat every entry unconditionally; the submission's referenced fields drive
   per-entry metadata fetch. (Windows conditions are almost all free-inline.)
+  *Realized by `sys::EnumPlan { want_stat, want_file_id }`, computed once by the
+  engine from the fetch mask (`want_stat` = the mask intersects the size/time/attr
+  fields) and the follow/cycle settings (`want_file_id` = cycle detection on **and**
+  `FollowLinks::Always`, needed only to loop-guard a followed reparse point). The
+  Linux backend keeps `getdents64`'s `d_type` for type/reparse and calls `statx` only
+  when the plan needs a field or `d_type` is `Unknown`; the portable backend skips its
+  per-entry `lstat` likewise. The Windows listing is inline, so the plan is a no-op
+  there.*
 - **D-14. Two orthogonal predicates** (revised from three): *emit this entry?* and
   *descend into this dir?* — **prune is not a separate predicate**: pruning a
   subtree ≡ `descend = false` (as in `find -prune`), so a user prune-rule is just

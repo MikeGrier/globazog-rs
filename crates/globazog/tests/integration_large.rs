@@ -230,8 +230,11 @@ fn non_utf8_filename_is_enumerated_and_matched() {
     let name = OsStr::from_bytes(b"bad\xff\xfename.dat");
     fs::write(root.path().join(name), b"payload").unwrap();
 
+    // Request SIZE explicitly so the byte-size assertion below is populated under the
+    // D-62 lazy-fetch contract (stat-tier fields are only fetched when asked for).
     let handle = QueryBuilder::new()
         .root(root.path())
+        .result_shape(globazog::MetaMask::SIZE)
         .pattern("*.dat", Dialect::Posix, Vec::new())
         .submit()
         .unwrap();

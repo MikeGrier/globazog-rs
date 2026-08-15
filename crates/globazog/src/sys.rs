@@ -98,34 +98,55 @@ pub struct DirScan {
     pub entry_errors: Vec<io::Error>,
 }
 
+/// What the engine needs from each entry's metadata, so a backend can skip the stat
+/// syscall when only names/types are wanted (D-62). The entry type and reparse status
+/// come from the directory listing itself (`d_type`) and never require a stat.
+#[derive(Clone, Copy, Debug)]
+pub struct EnumPlan {
+    /// Fetch the stat-tier fields (size, timestamps, attributes).
+    pub want_stat: bool,
+    /// Fetch the object's file identity, needed for reparse cycle detection (D-51).
+    pub want_file_id: bool,
+}
+
+impl EnumPlan {
+    /// Fetch everything — used by callers/tests that want full metadata.
+    pub const FULL: EnumPlan = EnumPlan {
+        want_stat: true,
+        want_file_id: true,
+    };
+}
+
 /// Enumerate one directory, dispatching to the platform's native backend where one
 /// exists (Windows `NtQueryDirectoryFile`, Linux `getdents64`+`statx`) and falling
 /// back to the portable [`enumerate_dir`] elsewhere. This is what the engine calls
-/// (D-4, D-6), so the native inline metadata / birth-time value flows through.
-pub fn enumerate(path: &Path) -> io::Result<DirScan> {
+/// (D-4, D-6), so the native inline metadata / birth-time value flows through. The
+/// `plan` lets a backend skip the per-entry stat when only names/types are needed.
+pub fn enumerate(path: &Path, plan: EnumPlan) -> io::Result<DirScan> {
     #[cfg(windows)]
     {
-        win::enumerate_dir_native(path)
+        win::enumerate_dir_native(path, plan)
     }
     #[cfg(target_os = "linux")]
     {
-        linux::enumerate_dir_native(path)
+        linux::enumerate_dir_native(path, plan)
     }
     #[cfg(not(any(windows, target_os = "linux")))]
     {
-        enumerate_dir(path)
+        enumerate_dir(path, plan)
     }
 }
 
 /// Enumerate one directory's entries with inline metadata (the portable backend).
 /// Symlink-aware: entry metadata is read without following symlinks. A single
 /// entry's metadata failure is collected into [`DirScan::entry_errors`] rather than
-/// aborting the whole directory (D-53).
-pub fn enumerate_dir(path: &Path) -> io::Result<DirScan> {
+/// aborting the whole directory (D-53). The per-entry stat is skipped when `plan`
+/// does not ask for stat-tier fields (D-62).
+pub fn enumerate_dir(path: &Path, plan: EnumPlan) -> io::Result<DirScan> {
     let mut entries = Vec::new();
     let mut entry_errors = Vec::new();
     for entry in fs::read_dir(path)? {
-        match read_one_entry(entry) {
+        match read_one_entry(entry, plan) {
             Ok(e) => entries.push(e),
             Err(err) => entry_errors.push(err),
         }
@@ -136,12 +157,12 @@ pub fn enumerate_dir(path: &Path) -> io::Result<DirScan> {
     })
 }
 
-/// Read one portable-backend entry with its (symlink-non-following) metadata.
-fn read_one_entry(entry: io::Result<fs::DirEntry>) -> io::Result<DirEntry> {
+/// Read one portable-backend entry, statting (lstat) only when the plan needs
+/// stat-tier fields, or a file identity for a symlink that might be followed (D-62,
+/// D-51). The entry type comes from the directory listing (`file_type`).
+fn read_one_entry(entry: io::Result<fs::DirEntry>, plan: EnumPlan) -> io::Result<DirEntry> {
     let entry = entry?;
     let ft = entry.file_type()?;
-    let md = entry.metadata()?; // does not traverse symlinks
-    let (attributes, is_reparse, file_id, ctime) = platform_extra(&md, &ft);
     let entry_type = if ft.is_dir() {
         EntryType::Dir
     } else if ft.is_file() {
@@ -149,6 +170,23 @@ fn read_one_entry(entry: io::Result<fs::DirEntry>) -> io::Result<DirEntry> {
     } else {
         EntryType::Other
     };
+    if !(plan.want_stat || (ft.is_symlink() && plan.want_file_id)) {
+        return Ok(DirEntry {
+            name: decode_name(&entry.file_name()),
+            entry_type,
+            is_reparse: ft.is_symlink(),
+            reparse_tag: 0,
+            attributes: 0,
+            size: 0,
+            btime: 0,
+            mtime: 0,
+            atime: 0,
+            ctime: 0,
+            file_id: FileId { volume: 0, id: 0 },
+        });
+    }
+    let md = entry.metadata()?; // does not traverse symlinks
+    let (attributes, is_reparse, file_id, ctime) = platform_extra(&md, &ft);
     Ok(DirEntry {
         name: decode_name(&entry.file_name()),
         entry_type,

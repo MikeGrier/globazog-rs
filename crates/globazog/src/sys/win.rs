@@ -9,7 +9,7 @@
 //! currently opens the supplied path directly, and the enumeration works on any
 //! directory handle.
 
-use super::{DirEntry, DirScan, FileId};
+use super::{DirEntry, DirScan, EnumPlan, FileId};
 use crate::predicate::EntryType;
 use crate::syntax::decode;
 use std::io;
@@ -32,8 +32,9 @@ const FILETIME_TO_UNIX_100NS: i64 = 116_444_736_000_000_000;
 /// The listing is inline, so there are no per-entry stat failures; the only entry
 /// error possible is a late `GetFileInformationByHandleEx` read error after one or
 /// more successful batches, which is surfaced in [`DirScan::entry_errors`] while the
-/// already-collected entries are preserved (D-53).
-pub fn enumerate_dir_native(path: &Path) -> io::Result<DirScan> {
+/// already-collected entries are preserved (D-53). Metadata is inline, so the `plan`
+/// (D-62 lazy fetch) is irrelevant here — every field is populated regardless.
+pub fn enumerate_dir_native(path: &Path, _plan: EnumPlan) -> io::Result<DirScan> {
     let dir = open_dir(path)?;
     let raw = dir.as_raw_handle() as HANDLE;
     let volume = volume_serial(raw)?;

@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Mike Grier
 
-use super::{enumerate_dir, nanos, read_one_entry};
+use super::{EnumPlan, enumerate_dir, nanos, read_one_entry};
 use crate::predicate::EntryType;
 use std::fs;
 use std::time::{Duration, UNIX_EPOCH};
@@ -12,7 +12,7 @@ fn portable_entry_failure_is_collected_not_fatal() {
     // A full end-to-end per-entry failure is not deterministically reproducible (the
     // Windows native backend has inline metadata and never fails per-entry; a Linux
     // `statx` failure is an inherent list/stat race), so the seam is tested directly.
-    let e = read_one_entry(Err(std::io::Error::from_raw_os_error(2)));
+    let e = read_one_entry(Err(std::io::Error::from_raw_os_error(2)), EnumPlan::FULL);
     assert!(e.is_err());
 }
 
@@ -56,7 +56,7 @@ fn enumerate_temp_tree() {
     }
 
     // Top level: exactly the 10 directories.
-    let top = enumerate_dir(root.path()).unwrap().entries;
+    let top = enumerate_dir(root.path(), EnumPlan::FULL).unwrap().entries;
     let dirs = top
         .iter()
         .filter(|e| e.entry_type == EntryType::Dir)
@@ -70,7 +70,9 @@ fn enumerate_temp_tree() {
             continue;
         }
         let name: String = e.name.iter().filter_map(|&c| char::from_u32(c)).collect();
-        let sub = enumerate_dir(&root.path().join(name)).unwrap().entries;
+        let sub = enumerate_dir(&root.path().join(name), EnumPlan::FULL)
+            .unwrap()
+            .entries;
         for s in &sub {
             if s.entry_type == EntryType::File {
                 files += 1;
@@ -87,7 +89,7 @@ fn enumerate_temp_tree() {
 fn meta_view_matches_entry() {
     let root = tempfile::tempdir().unwrap();
     fs::write(root.path().join("a.txt"), b"hello").unwrap();
-    let entries = enumerate_dir(root.path()).unwrap().entries;
+    let entries = enumerate_dir(root.path(), EnumPlan::FULL).unwrap().entries;
     let e = entries
         .iter()
         .find(|e| e.entry_type == EntryType::File)
@@ -112,8 +114,10 @@ fn native_matches_portable_and_has_file_ids() {
         }
     }
 
-    let portable = enumerate_dir(root.path()).unwrap().entries;
-    let native = enumerate_dir_native(root.path()).unwrap().entries;
+    let portable = enumerate_dir(root.path(), EnumPlan::FULL).unwrap().entries;
+    let native = enumerate_dir_native(root.path(), EnumPlan::FULL)
+        .unwrap()
+        .entries;
 
     // Same set of top-level directory names (both skip `.` / `..`).
     let mut pn: Vec<Vec<u32>> = portable.iter().map(|e| e.name.clone()).collect();
@@ -131,7 +135,7 @@ fn native_matches_portable_and_has_file_ids() {
     );
 
     // Native file sizes are read inline (D-13).
-    let files = enumerate_dir_native(&root.path().join("dir0"))
+    let files = enumerate_dir_native(&root.path().join("dir0"), EnumPlan::FULL)
         .unwrap()
         .entries;
     let file_sizes: Vec<u64> = files
@@ -157,8 +161,10 @@ fn native_linux_matches_portable_and_has_file_ids() {
         }
     }
 
-    let portable = enumerate_dir(root.path()).unwrap().entries;
-    let native = enumerate_dir_native(root.path()).unwrap().entries;
+    let portable = enumerate_dir(root.path(), EnumPlan::FULL).unwrap().entries;
+    let native = enumerate_dir_native(root.path(), EnumPlan::FULL)
+        .unwrap()
+        .entries;
 
     // Same set of top-level directory names (both skip `.` / `..`).
     let mut pn: Vec<Vec<u32>> = portable.iter().map(|e| e.name.clone()).collect();
@@ -181,7 +187,7 @@ fn native_linux_matches_portable_and_has_file_ids() {
     assert_eq!(pids, nids);
 
     // Native file sizes and modification times come from statx (D-13).
-    let files = enumerate_dir_native(&root.path().join("dir0"))
+    let files = enumerate_dir_native(&root.path().join("dir0"), EnumPlan::FULL)
         .unwrap()
         .entries;
     let regular: Vec<_> = files
@@ -202,11 +208,65 @@ fn native_linux_reports_symlinks_without_following() {
     fs::write(root.path().join("target.txt"), b"payload").unwrap();
     std::os::unix::fs::symlink("target.txt", root.path().join("link")).unwrap();
 
-    let native = enumerate_dir_native(root.path()).unwrap().entries;
+    let native = enumerate_dir_native(root.path(), EnumPlan::FULL)
+        .unwrap()
+        .entries;
     let link = native
         .iter()
         .find(|e| e.name == crate::syntax::decode::decode_bytes(b"link"))
         .expect("symlink entry present");
     assert!(link.is_reparse);
     assert_eq!(link.entry_type, EntryType::Other);
+}
+
+#[test]
+fn portable_plan_without_stat_skips_metadata() {
+    let root = tempfile::tempdir().unwrap();
+    fs::write(root.path().join("a.txt"), b"hello").unwrap();
+
+    // Names/types only: the portable backend must not stat, so size stays 0 while the
+    // type (from `file_type`) is still correct (D-62).
+    let plan = EnumPlan {
+        want_stat: false,
+        want_file_id: false,
+    };
+    let names_only = enumerate_dir(root.path(), plan).unwrap().entries;
+    let f = names_only
+        .iter()
+        .find(|e| e.entry_type == EntryType::File)
+        .unwrap();
+    assert_eq!(f.size, 0);
+
+    // With stat requested, the real size is populated.
+    let full = enumerate_dir(root.path(), EnumPlan::FULL).unwrap().entries;
+    let f = full
+        .iter()
+        .find(|e| e.entry_type == EntryType::File)
+        .unwrap();
+    assert_eq!(f.size, 5);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn native_linux_plan_without_stat_uses_dtype_only() {
+    use super::linux::enumerate_dir_native;
+
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir(root.path().join("d")).unwrap();
+    fs::write(root.path().join("f.txt"), b"hello").unwrap();
+
+    // No stat requested: the type comes from `getdents64`'s `d_type`, and the
+    // stat-tier fields (size, file id) are left unset (D-62).
+    let plan = EnumPlan {
+        want_stat: false,
+        want_file_id: false,
+    };
+    let entries = enumerate_dir_native(root.path(), plan).unwrap().entries;
+    assert!(entries.iter().any(|e| e.entry_type == EntryType::Dir));
+    let f = entries
+        .iter()
+        .find(|e| e.entry_type == EntryType::File)
+        .unwrap();
+    assert_eq!(f.size, 0);
+    assert_eq!(f.file_id.id, 0);
 }
