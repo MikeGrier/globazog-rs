@@ -123,9 +123,9 @@ is a [`CqItem`]:
 | `Match(m)` | An entry matched. `m.name`, `m.matched` (a [`PatternMask`] — `m.matched.iter()` yields the pattern indices), and `m.meta` (size/timestamps/type). |
 | `ContainerEnter(e)` | A directory scan started. `e.id`, `e.parent`, `e.name`. |
 | `ContainerEnd(e)` | A directory subtree finished (bottom-up, 1:1 with its enter). |
-| `Error(e)` | A per-entry/-subtree failure (e.g. permission denied); the walk continues. |
+| `Error(e)` | A per-entry/-subtree failure (e.g. permission denied); the walk continues past it. The one exception is a fatal error (see `Failed` below), which stops the walk. |
 | `DecisionRequest(_)` | Reserved for `defer-to-client` (not yet emitted). |
-| `Terminal(t)` | The walk ended (`Completed` or `Cancelled`). Always the **last** item. |
+| `Terminal(t)` | The walk ended. Always the **last** item. `t.reason` is `Completed`, `Cancelled`, or `Failed` — a fatal error (currently a root that could not be enumerated) stopped the walk; its causing `Error` item lands immediately before this terminal. |
 
 Ordering guarantees you can rely on: a container's `ContainerEnter` precedes any
 `Match`/child that references it, and `ContainerEnd`s cascade bottom-up (a child ends
