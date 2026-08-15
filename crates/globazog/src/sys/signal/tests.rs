@@ -3,7 +3,6 @@
 use super::Signal;
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
 
 #[test]
 fn notify_then_wait_returns_and_consumes() {
@@ -31,7 +30,6 @@ fn cross_thread_wakeup() {
         s2.wait();
         42
     });
-    thread::sleep(Duration::from_millis(20));
     s.notify();
     assert_eq!(waiter.join().unwrap(), 42);
 }
