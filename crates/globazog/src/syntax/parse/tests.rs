@@ -175,6 +175,17 @@ fn win_brace_doubling_is_literal() {
 }
 
 #[test]
+fn stray_closing_brace_is_rejected() {
+    // D-45: a literal `}` must be escaped (`\}` in posix, `}}` in win); a lone,
+    // unescaped `}` is not silently accepted as a literal.
+    assert!(parse("foo}", Dialect::Posix).is_err());
+    assert!(parse("foo}", Dialect::Win).is_err());
+    // The escaped forms still compile to a literal `}`.
+    assert_eq!(segments("foo\\}", Dialect::Posix), vec![litseg("foo}")]);
+    assert_eq!(segments("foo}}", Dialect::Win), vec![litseg("foo}")]);
+}
+
+#[test]
 fn win_brace_doubling_not_honored_inside_alternation_arm() {
     // Limitation (D-45): inside an alternation arm, `{{`/`}}` doubling is not
     // recognized. `{` is the (rejected) start of a nested group and the first `}`

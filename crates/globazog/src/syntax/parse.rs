@@ -210,8 +210,12 @@ fn tokenize(seg: &[char], dialect: Dialect) -> Result<Vec<Token>, Error> {
                 i += 2;
             }
             '}' => {
-                toks.push(Token::Literal('}' as u32));
-                i += 1;
+                // A stray closing brace: valid literal braces are escaped (`\}` in
+                // posix, `}}` in win) and handled above; an alternation's own `}` is
+                // consumed by `parse_brace`. Anything reaching here violates D-45.
+                return Err(Error::Pattern(
+                    "unescaped `}`; escape it (`\\}` in posix, `}}` in win)".into(),
+                ));
             }
             _ => {
                 toks.push(Token::Literal(c as u32));
