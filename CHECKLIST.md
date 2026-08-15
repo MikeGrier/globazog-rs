@@ -229,9 +229,12 @@ native Linux backend is blocked on a Linux test environment (this host is Window
   `TP_WORK`, and the Linux io_uring path where available, driven by the M7 unified
   park/resume continuation (D-59); as part of this, thread a **parent directory
   handle** through the enumeration backend so children open relative to it (openat /
-  handle-relative `NtCreateFile`, D-9), replacing the current full-path open.
-  **Gated on** building the D-5 completion abstraction + the native async FFI, not a
-  missing consumer.
+  handle-relative `NtCreateFile`, D-9), replacing the current full-path open. Restore
+  the `\?\` NT-layer open (dropped when M5-4 switched to `std::fs::OpenOptions`) so
+  Windows **long paths (>260)** and **trailing-dot-space names** work — and add the
+  M8-2 integration coverage for them (those files cannot be created through the Win32
+  layer, so the tests belong here). **Gated on** building the D-5 completion
+  abstraction + the native async FFI, not a missing consumer.
 
 - [ ] **M7-7. `defer-to-client` predicate escalation** (D-58): add a **tri-state**
   predicate leaf (accept / reject / defer) to the M4 vocabulary; on defer, emit a
@@ -242,16 +245,20 @@ native Linux backend is blocked on a Linux test environment (this host is Window
 
 ## M8 — End-to-end integration
 
-- [ ] **M8-1. Wire it together**: syntax + predicate + sys + ring + engine behind
-  the public builder/submit API.
+- [x] **M8-1. Wire it together**: syntax + predicate + sys + ring + engine behind
+  the public builder/submit API, with a curated crate-root re-export surface
+  (`globazog::{QueryBuilder, CqItem, Dialect, …}`).
 
-- [ ] **M8-2. Large-scale integration tests**: thousands of files, deep trees,
-  reparse points/junctions, long paths, non-UTF-8 / trailing-dot-space names
-  (D-30, D-46); verify match correctness, ordering markers, backpressure, cancel.
+- [x] **M8-2. Large-scale integration tests** (D-30, D-46): thousands of files (5000),
+  deep trees (60 levels), mixed roots, bounded no-drop backpressure (2-slot ring),
+  cancellation, and (unix) symlink-loop safety + non-UTF-8 names — match correctness,
+  Enter/End nesting, and terminal markers verified. Windows **long-path (>260) and
+  trailing-dot-space** coverage needs the native `\?\` open path (the files cannot
+  even be *created* through the Win32 layer) → folded into M7-6.
 
-- [ ] **M8-3. Example consumer**: a minimal end-to-end example (the tpu-mcp globber
-  replacement shape, D-57) exercising multi-pattern + per-pattern emit + defer-to-
-  client.
+- [x] **M8-3. Example consumer** (`examples/glob.rs`, D-57): the tpu-mcp globber shape
+  — multi-pattern + per-pattern emit filter, printing matches and the terminal
+  outcome. (`defer-to-client` awaits M7-7.)
 
-- [ ] **M8-4. Docs pass**: crate-level docs, the `win` brace-escaping section
-  (D-45), and a DESIGN-NOTES cross-link.
+- [x] **M8-4. Docs pass**: crate-level docs with a runnable-shape example, the `win`
+  brace-doubling escape section (D-45), and a DESIGN-NOTES / `D-70` cross-link.
