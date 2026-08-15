@@ -2,8 +2,10 @@
 
 //! Reversible, non-panicking decoding of native filesystem names into the 32-bit
 //! code-point space (D-46): Windows UTF-16 with unpaired-surrogate preservation
-//! (WTF-8 style) and Unix bytes with PEP-383 surrogate-escaping. The bytes are
-//! shipped verbatim on the wire (D-63); decoding happens only at match time.
+//! (WTF-8 style) and Unix bytes with PEP-383 surrogate-escaping. Enumeration decodes
+//! each name immediately, so a `CqItem` / `Name` carries the resulting code-point
+//! sequence (D-69); no verbatim native units are shipped on the ring or decoded
+//! later at match time.
 
 use crate::syntax::CodePoint;
 
