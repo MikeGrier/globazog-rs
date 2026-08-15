@@ -17,7 +17,7 @@ owned multi-dialect glob syntax, and an io_uring-shaped submit/complete API.
 
 ## Design
 
-The full design (decisions `D-1`…`D-68`) lives in
+The full design (decisions `D-1`…`D-72`) lives in
 [DESIGN-NOTES.md](DESIGN-NOTES.md); the build plan is in
 [CHECKLIST.md](CHECKLIST.md).
 
