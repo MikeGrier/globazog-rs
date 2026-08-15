@@ -85,6 +85,13 @@ pub fn parse(input: &str, dialect: Dialect) -> Result<ParsedPattern, Error> {
             continue;
         }
         if let Some(ps) = classify_segment(&seg, dialect)? {
+            // Collapse consecutive `**` (D-24): `**/**/x` is equivalent to `**/x`, so
+            // a run of recursive segments must not retain redundant states.
+            if matches!(ps, PatternSegment::DoubleStar)
+                && matches!(segments.last(), Some(PatternSegment::DoubleStar))
+            {
+                continue;
+            }
             segments.push(ps);
         }
     }

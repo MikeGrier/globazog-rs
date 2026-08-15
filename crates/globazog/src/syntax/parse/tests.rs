@@ -62,6 +62,25 @@ fn posix_double_star_segment() {
 }
 
 #[test]
+fn consecutive_double_stars_collapse() {
+    // D-24: `**/**/x` ≡ `**/x`; a run of `**` must collapse to a single recursive
+    // segment rather than retaining redundant states.
+    assert_eq!(
+        segments("**/**/x", Dialect::Posix),
+        vec![PatternSegment::DoubleStar, litseg("x")]
+    );
+    assert_eq!(
+        segments("a/**/**/**/b", Dialect::Posix),
+        vec![litseg("a"), PatternSegment::DoubleStar, litseg("b"),]
+    );
+    // A trailing run collapses too.
+    assert_eq!(
+        segments("x/**/**", Dialect::Posix),
+        vec![litseg("x"), PatternSegment::DoubleStar]
+    );
+}
+
+#[test]
 fn posix_backslash_escapes_metachar() {
     // "\*" -> a literal star, not a wildcard.
     assert_eq!(segments("\\*", Dialect::Posix), vec![seg(vec![l('*')])]);
