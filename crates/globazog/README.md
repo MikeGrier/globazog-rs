@@ -112,6 +112,11 @@ Leaf constructors cover the common cases: [`Leaf::name_exact`], [`Leaf::name_glo
 `Size`, `Time`, `Depth`, `IsType`, `IsReparse`, `ReparseTag`, `AttrsAllSet`, and
 `AttrsAllClear`.
 
+> **Portability note:** `AttrsAllSet` / `AttrsAllClear` and `ReparseTag` carry
+> Win32 semantics — the `FILE_ATTRIBUTE_*` bitmask and reparse tag are `0` on
+> non-Windows, so those leaves don't match there. Use `IsReparse` / `IsType` for
+> cross-platform type and symlink/reparse checks.
+
 ### The completion ring
 
 `handle.completions()` is the [`CompletionRing`] you service. Pop items with

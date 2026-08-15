@@ -85,9 +85,9 @@ bitflags! {
         const BTIME   = 1 << 4;
         /// Entry type.
         const TYPE    = 1 << 5;
-        /// Reparse-point status and tag.
+        /// Reparse-point status and tag (the tag is Win32-only; `0` off Windows).
         const REPARSE = 1 << 6;
-        /// Attribute bitmask.
+        /// Win32 `FILE_ATTRIBUTE_*` bitmask (`0` off Windows).
         const ATTRS   = 1 << 7;
     }
 }
@@ -105,9 +105,11 @@ pub struct EntryMeta<'a> {
     pub entry_type: EntryType,
     /// Whether the entry is a reparse point (D-13).
     pub is_reparse: bool,
-    /// The reparse tag (0 when not a reparse point).
+    /// The reparse tag — a Win32 concept: `0` when not a reparse point, and always
+    /// `0` on non-Windows (Unix symlinks have no tag).
     pub reparse_tag: u32,
-    /// The attribute bitmask (Windows `FILE_ATTRIBUTE_*`; sparse on Linux).
+    /// The Win32 `FILE_ATTRIBUTE_*` bitmask; always `0` on non-Windows, which has no
+    /// equivalent.
     pub attributes: u32,
     /// File size in bytes.
     pub size: u64,
@@ -161,21 +163,31 @@ pub enum Leaf {
         /// Invert the test.
         negate: bool,
     },
-    /// The entry is (or is not) a reparse point (D-13, D-52).
+    /// The entry is (or, negated, is not) a reparse point (D-13, D-52). Portable: a
+    /// Unix symlink counts as a reparse point, so this is the cross-platform way to
+    /// test for symlinks/reparse points.
     IsReparse {
         /// Invert the test.
         negate: bool,
     },
-    /// The reparse tag equals (or, negated, differs from) `tag`.
+    /// The reparse tag equals (or, negated, differs from) `tag`. **Win32-only
+    /// semantics:** the reparse tag is a Windows concept and is `0` on non-Windows,
+    /// so off Windows this matches only `tag == 0`. Use [`IsReparse`](Self::IsReparse)
+    /// to detect symlinks/reparse points portably.
     ReparseTag {
         /// The tag to compare.
         tag: u32,
         /// Invert the test.
         negate: bool,
     },
-    /// Every bit in `mask` is set in the attributes.
+    /// Every bit in `mask` is set in the attributes. **Win32-only semantics:**
+    /// `attributes` is the Windows `FILE_ATTRIBUTE_*` bitmask and is `0` on
+    /// non-Windows, so a non-zero `mask` never matches there — use
+    /// [`IsType`](Self::IsType) / [`IsReparse`](Self::IsReparse) for portable checks.
     AttrsAllSet(u32),
-    /// Every bit in `mask` is clear in the attributes.
+    /// Every bit in `mask` is clear in the attributes. Because `attributes` is `0` on
+    /// non-Windows (Win32-only; see [`AttrsAllSet`](Self::AttrsAllSet)), this is
+    /// vacuously true there.
     AttrsAllClear(u32),
     /// The size compares to `value` via `op`.
     Size {
