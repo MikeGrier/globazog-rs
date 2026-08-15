@@ -71,9 +71,10 @@ fn thousands_of_files_all_match() {
 
 #[test]
 fn deep_tree_terminates_with_balanced_containers() {
-    // Skipped under CI: the 60-level chain can exceed Windows' legacy MAX_PATH on
-    // runners without long-path support (the setup uses std `fs::create_dir`).
-    if std::env::var_os("CI").is_some() {
+    // Skipped under CI on Windows only: the 60-level chain can exceed Windows' legacy
+    // MAX_PATH on runners without long-path support (setup uses std `fs::create_dir`).
+    // MAX_PATH is irrelevant on Linux, so that CI still exercises the deep traversal.
+    if cfg!(windows) && std::env::var_os("CI").is_some() {
         return;
     }
     let root = tempfile::tempdir().unwrap();

@@ -1,6 +1,6 @@
 # Plans
 
-Tracks all `CHECKLIST.md` files in this component and their status.
+Tracks all [CHECKLIST.md](CHECKLIST.md) files in this component and their status.
 
 | Path to CHECKLIST.md | Status | Brief description | Design Notes |
 |---|---|---|---|

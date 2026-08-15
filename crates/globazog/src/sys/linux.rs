@@ -5,8 +5,8 @@
 //! fills each entry's metadata with `statx` — the one syscall that exposes the
 //! birth time (`btime`, D-13) and a nanosecond stat tier that `std` does not.
 //! Names are shipped as raw bytes decoded reversibly (D-46). Relative-open by
-//! parent fd (D-9) is wired by the engine (M7); the enumeration works on any
-//! directory fd.
+//! parent fd (D-9) is a pending follow-up (M7-6); this backend currently opens the
+//! supplied path directly, and the enumeration works on any directory fd.
 //!
 //! Unlike the Windows backend (whose directory query returns inline metadata),
 //! Linux `getdents64` yields only name + `d_type` + `d_ino`, so size/timestamps

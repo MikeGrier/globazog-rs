@@ -4,8 +4,8 @@
 
 Durable notes for continuing work on this repository (the crate is `globazog`).
 This file exists so context survives a fresh clone; the authoritative design and
-plan live in [DESIGN-NOTES.md](DESIGN-NOTES.md), [CHECKLIST.md](CHECKLIST.md),
-[COMPLETED-CHECKLIST.md](COMPLETED-CHECKLIST.md), and [PLANS.md](PLANS.md).
+plan live in [DESIGN-NOTES.md](DESIGN-NOTES.md), [CHECKLIST.md](CHECKLIST.md), and
+[PLANS.md](PLANS.md).
 
 ## Current status (2026-08-14)
 

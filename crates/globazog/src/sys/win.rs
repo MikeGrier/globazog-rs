@@ -5,8 +5,9 @@
 //! enumerates via `GetFileInformationByHandleEx(FileIdExtdDirectoryInfo)` — a
 //! documented wrapper over `NtQueryDirectoryFile` — yielding inline attributes,
 //! reparse tag, all four timestamps, size, and the 128-bit file id (D-13, D-51).
-//! Relative-open by parent handle (D-9) is wired by the engine (M7); the
-//! enumeration works on any directory handle.
+//! Relative-open by parent handle (D-9) is a pending follow-up (M7-6); this backend
+//! currently opens the supplied path directly, and the enumeration works on any
+//! directory handle.
 
 use super::{DirEntry, FileId};
 use crate::predicate::EntryType;
