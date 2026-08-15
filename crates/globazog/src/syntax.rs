@@ -6,7 +6,8 @@
 //! (D-24, D-44, D-67); anchor extraction and the pattern-set model (D-36–D-39).
 //!
 //! This module owns the dialect-independent core (IR, matcher, path splitting,
-//! anchor extraction); the dialect front-ends that parse pattern text land in M3.
+//! anchor extraction) plus the dialect front-ends (`dialect`, `parse`) that lower
+//! each named dialect's pattern text into that IR; `upcase` backs case-folding.
 
 pub mod anchor;
 pub mod decode;
