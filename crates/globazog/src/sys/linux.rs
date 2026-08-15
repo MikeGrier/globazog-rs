@@ -12,7 +12,7 @@
 //! Linux `getdents64` yields only name + `d_type` + `d_ino`, so size/timestamps
 //! require a per-entry `statx` — the platform reality (D-6), not a design choice.
 
-use super::{DirEntry, DirScan, EnumPlan, FileId};
+use super::{DirEntry, DirScan, EntryFailure, EnumPlan, FileId};
 use crate::predicate::EntryType;
 use crate::syntax::decode;
 use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Statx, StatxFlags};
@@ -47,7 +47,10 @@ pub fn enumerate_dir_native(path: &Path, plan: EnumPlan) -> io::Result<DirScan> 
                 if names.is_empty() {
                     return Err(io::Error::from(err));
                 }
-                entry_errors.push(io::Error::from(err));
+                entry_errors.push(EntryFailure {
+                    name: None,
+                    source: io::Error::from(err),
+                });
                 break;
             }
         };
@@ -80,7 +83,10 @@ pub fn enumerate_dir_native(path: &Path, plan: EnumPlan) -> io::Result<DirScan> 
         }
         match fs::statx(&dirfd, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW, mask) {
             Ok(st) => entries.push(make_entry(name, &st)),
-            Err(err) => entry_errors.push(io::Error::from(err)),
+            Err(err) => entry_errors.push(EntryFailure {
+                name: Some(decode::decode_bytes(name.to_bytes())),
+                source: io::Error::from(err),
+            }),
         }
     }
     Ok(DirScan {

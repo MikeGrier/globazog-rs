@@ -237,7 +237,10 @@ impl Engine {
             Err(err) => {
                 let cq_err = CqError {
                     container: Some(job.container),
-                    error: EntryError { source: err },
+                    error: EntryError {
+                        name: None,
+                        source: err,
+                    },
                 };
                 if job.parent.is_none() {
                     // A root that cannot be enumerated is fatal (D-71). Close the
@@ -258,10 +261,13 @@ impl Engine {
         };
         // Surface each per-entry metadata failure as its own error item; the walk
         // continues with the entries that were read successfully (D-53).
-        for err in scan.entry_errors {
+        for failure in scan.entry_errors {
             self.emit(CqItem::Error(CqError {
                 container: Some(job.container),
-                error: EntryError { source: err },
+                error: EntryError {
+                    name: failure.name.map(|cp| Name::from_code_points(&cp)),
+                    source: failure.source,
+                },
             }));
         }
         let entries = scan.entries;

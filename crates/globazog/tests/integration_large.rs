@@ -293,6 +293,11 @@ fn unopenable_root_terminates_with_failed() {
     let n = items.len();
     assert!(matches!(items[n - 2], CqItem::Error(_)));
     assert!(matches!(&items[n - 1], CqItem::Terminal(t) if t.reason == TerminalReason::Failed));
+    // A directory-level failure (the unopenable root) names no single entry (D-53).
+    let CqItem::Error(e) = &items[n - 2] else {
+        unreachable!()
+    };
+    assert!(e.error.name.is_none());
 }
 
 #[cfg(unix)]

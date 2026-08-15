@@ -9,7 +9,7 @@
 //! currently opens the supplied path directly, and the enumeration works on any
 //! directory handle.
 
-use super::{DirEntry, DirScan, EnumPlan, FileId};
+use super::{DirEntry, DirScan, EntryFailure, EnumPlan, FileId};
 use crate::predicate::EntryType;
 use crate::syntax::decode;
 use std::io;
@@ -78,7 +78,10 @@ pub fn enumerate_dir_native(path: &Path, plan: EnumPlan) -> io::Result<DirScan> 
             if out.is_empty() {
                 return Err(io_err);
             }
-            entry_errors.push(io_err);
+            entry_errors.push(EntryFailure {
+                name: None,
+                source: io_err,
+            });
             break;
         }
         first = false;

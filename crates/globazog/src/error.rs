@@ -36,6 +36,10 @@ pub enum Error {
 #[error("entry error: {source}")]
 #[non_exhaustive]
 pub struct EntryError {
+    /// The failing entry's name, when a specific entry can be attributed. `None` for
+    /// a directory-level failure — an unopenable root, or a late listing read that
+    /// truncates the directory — where no single entry is at fault.
+    pub name: Option<crate::ring::Name>,
     /// The underlying OS error for the failed operation.
     #[source]
     pub source: std::io::Error,

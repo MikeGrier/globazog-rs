@@ -94,8 +94,19 @@ pub struct DirScan {
     /// The entries read successfully, with inline metadata.
     pub entries: Vec<DirEntry>,
     /// Per-entry metadata failures (e.g. an entry removed or made unstatable between
-    /// listing and stat). Empty on the Windows backend, whose listing is inline.
-    pub entry_errors: Vec<io::Error>,
+    /// listing and stat), each carrying the failing entry's name when known (D-53).
+    pub entry_errors: Vec<EntryFailure>,
+}
+
+/// A per-entry failure encountered while enumerating a directory (D-53): the OS
+/// error plus the failing entry's name when it can be attributed to one. `name` is
+/// `None` only for a directory-level fault that no single entry owns — a late
+/// read/`getdents` error that truncates the listing after some entries were read.
+pub struct EntryFailure {
+    /// The failing entry's decoded name, when a specific entry can be named.
+    pub name: Option<Vec<CodePoint>>,
+    /// The underlying OS error.
+    pub source: io::Error,
 }
 
 /// What the engine needs from each entry's metadata, so a backend can skip the stat
@@ -148,7 +159,7 @@ pub fn enumerate_dir(path: &Path, plan: EnumPlan) -> io::Result<DirScan> {
     for entry in fs::read_dir(path)? {
         match read_one_entry(entry, plan) {
             Ok(e) => entries.push(e),
-            Err(err) => entry_errors.push(err),
+            Err(failure) => entry_errors.push(failure),
         }
     }
     Ok(DirScan {
@@ -160,9 +171,16 @@ pub fn enumerate_dir(path: &Path, plan: EnumPlan) -> io::Result<DirScan> {
 /// Read one portable-backend entry, statting (lstat) only when the plan needs
 /// stat-tier fields, or a file identity for a symlink that might be followed (D-62,
 /// D-51). The entry type comes from the directory listing (`file_type`).
-fn read_one_entry(entry: io::Result<fs::DirEntry>, plan: EnumPlan) -> io::Result<DirEntry> {
-    let entry = entry?;
-    let ft = entry.file_type()?;
+fn read_one_entry(
+    entry: io::Result<fs::DirEntry>,
+    plan: EnumPlan,
+) -> Result<DirEntry, EntryFailure> {
+    let entry = entry.map_err(|source| EntryFailure { name: None, source })?;
+    let name = decode_name(&entry.file_name());
+    let ft = entry.file_type().map_err(|source| EntryFailure {
+        name: Some(name.clone()),
+        source,
+    })?;
     let entry_type = if ft.is_dir() {
         EntryType::Dir
     } else if ft.is_file() {
@@ -172,7 +190,7 @@ fn read_one_entry(entry: io::Result<fs::DirEntry>, plan: EnumPlan) -> io::Result
     };
     if !(plan.want_stat || (ft.is_symlink() && plan.want_file_id)) {
         return Ok(DirEntry {
-            name: decode_name(&entry.file_name()),
+            name,
             entry_type,
             is_reparse: ft.is_symlink(),
             reparse_tag: 0,
@@ -185,10 +203,13 @@ fn read_one_entry(entry: io::Result<fs::DirEntry>, plan: EnumPlan) -> io::Result
             file_id: FileId { volume: 0, id: 0 },
         });
     }
-    let md = entry.metadata()?; // does not traverse symlinks
+    let md = entry.metadata().map_err(|source| EntryFailure {
+        name: Some(name.clone()),
+        source,
+    })?; // does not traverse symlinks
     let (attributes, is_reparse, file_id, ctime) = platform_extra(&md, &ft);
     Ok(DirEntry {
-        name: decode_name(&entry.file_name()),
+        name,
         entry_type,
         is_reparse,
         reparse_tag: 0,
