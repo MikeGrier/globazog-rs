@@ -66,6 +66,13 @@ environment (it unblocked the native Linux backend, M5-5). Key facts:
 - **Repo mount**: the Windows drive is mounted at `/mnt/<drive>`, so this repo is at
   `/mnt/q/github/<repo-folder>` (adjust `<repo-folder>` after the rename/re-clone).
 
+**Sanctioned exception to the "never terminal `cargo`" rule** (see the Windows-host
+section above and [.github/copilot-instructions.md](.github/copilot-instructions.md)):
+the cargo-mcp tools drive the **host** (Windows) toolchain and cannot target the WSL
+Linux toolchain, so Linux validation is the *one* place terminal `cargo` is required —
+always via `wsl … bash -lc` with the isolated `CARGO_TARGET_DIR` below, never against
+the host `target/`. Host builds and tests still go exclusively through cargo-mcp.
+
 Run the suite (replace the user and path as needed):
 
 ```pwsh
