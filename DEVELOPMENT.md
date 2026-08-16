@@ -9,7 +9,7 @@ plan live in [DESIGN-NOTES.md](DESIGN-NOTES.md), [CHECKLIST.md](CHECKLIST.md), a
 
 ## Current status (2026-08-14)
 
-- **Numbered milestones M1–M10 are complete**: matcher → dialects → predicates →
+- **Numbered milestones M1–M11 are complete**: matcher → dialects → predicates →
   `sys` (native Windows `NtQueryDirectoryFile` + Linux `openat`/`getdents64`/`statx`
   backends, portable `std::fs` fallback) → ring (SQ/CQ) → the synchronous Model B
   engine → end-to-end integration, an example, and docs. **M9** (review-driven)
@@ -17,6 +17,8 @@ plan live in [DESIGN-NOTES.md](DESIGN-NOTES.md), [CHECKLIST.md](CHECKLIST.md), a
   readable siblings; `sys::DirScan`, D-53) and a fatal-error terminal
   (`TerminalReason::Failed` for a root that cannot be enumerated, D-71). **M10** added
   a client-controlled symlink follow policy (`FollowLinks`, default `Never`, D-72).
+  **M11** added owned lexical root canonicalization and rejection of overlapping
+  supplied roots (D-73).
 - The library is working end-to-end: `examples/glob.rs` scans a ~43k-directory
   drive for `**/*.h` in ~1.3 s (release).
 - Test counts: ~129 on Windows, ~131 on Linux (extra unix-gated tests), all green;
@@ -34,8 +36,10 @@ plan live in [DESIGN-NOTES.md](DESIGN-NOTES.md), [CHECKLIST.md](CHECKLIST.md), a
 - **M7-7** — `defer-to-client` predicate escalation (D-58). Gated on adding a
   **tri-state** predicate leaf (accept/reject/defer); the SQ `DecisionAnswer`
   plumbing and park/resume are already in place.
-- **M∞-1 / M∞-2** — zero-copy inline name blob + over-cap spill; syscall-level
-  FS-filter pushdown at terminal literal segments. Gated on profiling.
+- **M∞-1 / M∞-2 / M∞-3** — zero-copy inline name blob + over-cap spill; syscall-level
+  FS-filter pushdown at terminal literal segments; the multi-frame overlapping-root
+  merge (full D-37, the alternative to today's reject-overlap policy). Gated on
+  profiling / a semantics decision.
 
 The engine's model is decision **D-70** in [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
