@@ -37,10 +37,11 @@ impl Dialect {
         }
     }
 
-    /// The current concrete `(major, minor)` version of this dialect (D-20).
-    pub fn version(self) -> (u16, u16) {
+    /// The current concrete semver `(major, minor, patch)` version of this dialect
+    /// (D-20).
+    pub fn version(self) -> (u16, u16, u16) {
         match self {
-            Dialect::Posix | Dialect::Win => (1, 0),
+            Dialect::Posix | Dialect::Win => (1, 0, 0),
         }
     }
 
@@ -69,8 +70,9 @@ impl Dialect {
     }
 
     /// Resolve a dialect id (optionally with an `@version` suffix) to a concrete
-    /// dialect (D-20). Partial-version binding: `posix`, `posix@1`, and `posix@1.0`
-    /// all bind to the highest matching concrete version; `posix@2` does not.
+    /// dialect (D-20). Partial-version binding: `posix`, `posix@1`, `posix@1.0`, and
+    /// `posix@1.0.0` all bind to the highest matching concrete version; `posix@2` and
+    /// an overlong `posix@1.0.0.0` do not.
     pub fn resolve(spec: &str) -> Option<Dialect> {
         let (id, ver) = match spec.split_once('@') {
             Some((id, ver)) => (id, Some(ver)),
@@ -88,8 +90,10 @@ impl Dialect {
     }
 }
 
-/// True if `spec` (a dot-separated version prefix) binds to `concrete` (D-20).
-fn version_matches(spec: &str, concrete: (u16, u16)) -> bool {
+/// True if `spec` (a dot-separated version prefix of up to three components) binds to
+/// `concrete` (D-20). A prefix longer than a full `major.minor.patch` triplet is not a
+/// real version and never binds.
+fn version_matches(spec: &str, concrete: (u16, u16, u16)) -> bool {
     let mut parts = Vec::new();
     for p in spec.split('.') {
         match p.parse::<u16>() {
@@ -97,11 +101,12 @@ fn version_matches(spec: &str, concrete: (u16, u16)) -> bool {
             Err(_) => return false,
         }
     }
-    let (major, minor) = concrete;
+    let (major, minor, patch) = concrete;
     match parts.as_slice() {
-        [] => true,
         [a] => *a == major,
         [a, b] => *a == major && *b == minor,
-        [a, b, rest @ ..] => *a == major && *b == minor && rest.iter().all(|&x| x == 0),
+        [a, b, c] => *a == major && *b == minor && *c == patch,
+        // Empty (`id@`) or an overlong 4+-component spec is not a real version.
+        _ => false,
     }
 }

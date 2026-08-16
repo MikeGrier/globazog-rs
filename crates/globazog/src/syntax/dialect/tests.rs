@@ -33,4 +33,7 @@ fn resolve_mismatched_versions_reject() {
     assert_eq!(Dialect::resolve("posix@1.1"), None);
     assert_eq!(Dialect::resolve("posix@1.0.1"), None);
     assert_eq!(Dialect::resolve("posix@x"), None);
+    // Overlong (4+ components) and an empty suffix are not real versions.
+    assert_eq!(Dialect::resolve("posix@1.0.0.0"), None);
+    assert_eq!(Dialect::resolve("posix@"), None);
 }
