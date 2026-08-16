@@ -505,9 +505,12 @@ fn confine_fail_closed_on_broken_symlink() {
     use globazog::{BlockReason, FollowLinks};
 
     // A dangling symlink: its target does not exist, so `canonicalize` fails and the
-    // fail-closed policy declines it as RootEscape rather than following it (D-75).
+    // fail-closed policy declines it as RootEscape rather than following it (D-75). The
+    // target is a path *inside* the fresh temp dir that the test never creates, so its
+    // absence is controlled (an absolute host path could coincidentally exist).
     let root = tempfile::tempdir().unwrap();
-    std::os::unix::fs::symlink("/no/such/globazog/target", root.path().join("broken")).unwrap();
+    let missing = root.path().join("does_not_exist_target");
+    std::os::unix::fs::symlink(&missing, root.path().join("broken")).unwrap();
 
     let handle = QueryBuilder::new()
         .root(root.path())
@@ -648,7 +651,7 @@ fn confine_reports_each_escape_separately() {
     assert_eq!(blocked, vec!["esc_a".to_string(), "esc_b".to_string()]);
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 fn confine_reports_hardlinked_symlink_escape_twice() {
     use globazog::FollowLinks;
@@ -656,13 +659,13 @@ fn confine_reports_hardlinked_symlink_escape_twice() {
     // Two hard-linked names for the *same* escaping symlink share one filesystem
     // identity. Confinement is checked before cycle detection consumes that identity,
     // so both names are reported per-entry rather than the second being swallowed as a
-    // cycle (D-75).
+    // cycle (D-75). Linux-only: this relies on `link(2)` not following the symlink
+    // (a second name for the symlink inode itself); other Unixes may follow it, which
+    // would hard-link the target dir instead of giving two names to one symlink.
     let root = tempfile::tempdir().unwrap();
     let outside = tempfile::tempdir().unwrap();
     let link_a = root.path().join("esc_a");
     std::os::unix::fs::symlink(outside.path(), &link_a).unwrap();
-    // `link(2)` on Linux does not follow the symlink: this is a second name for the
-    // symlink inode itself, giving both names the same file id.
     fs::hard_link(&link_a, root.path().join("esc_b")).unwrap();
 
     let handle = QueryBuilder::new()
