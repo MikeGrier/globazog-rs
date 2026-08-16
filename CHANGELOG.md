@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/MikeGrier/globazog-rs/compare/v0.1.1...v0.1.2) (2026-08-16)
+
+
+### Bug Fixes
+
+* correct published crate metadata for the globazog-rs rename ([c8bbe35](https://github.com/MikeGrier/globazog-rs/commit/c8bbe355b58ddcf52c092dc515b901d453f1a649))
+* correct published crate metadata for the globazog-rs rename so crates.io/docs.rs links resolve ([d62157c](https://github.com/MikeGrier/globazog-rs/commit/d62157c8f445269217b4967877f20da6cc101eda))
+
 ## [0.1.1](https://github.com/MikeGrier/globazog-rs/compare/v0.1.0...v0.1.1) (2026-08-16)
 
 
