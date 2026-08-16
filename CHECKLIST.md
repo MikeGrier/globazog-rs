@@ -1,16 +1,8 @@
 # globazog — Build Checklist
 
-Built **bottom-up** per [DESIGN-NOTES.md](DESIGN-NOTES.md). Completed milestones
-**M1–M11** (matcher → dialects → predicates → `sys` incl. native Win/Linux backends →
-ring → the synchronous Model B engine → end-to-end integration, example, docs →
-per-entry error propagation + fatal-error terminal → client-controlled symlink follow
-policy → owned root canonicalization + overlapping-root rejection, D-73) are archived in
-[COMPLETED-CHECKLIST.md](COMPLETED-CHECKLIST.md). Only the remaining pending work is
-listed below.
-
-End-of-milestone steps (repo standard, **not** listed as items): build the default
-workspace debug+release with zero warnings; test the in-scope crate; sync with
-origin and push.
+Action queue only — pending and in-progress work. Completed milestones are archived in
+[COMPLETED-CHECKLIST.md](COMPLETED-CHECKLIST.md) (status index in [PLANS.md](PLANS.md));
+the design rationale is in [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
 ## M7+ — Engine follow-ups (parked, gated beyond completed M7)
 
