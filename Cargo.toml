@@ -5,7 +5,7 @@ members = ["crates/globazog"]
 resolver = "2"
 
 [workspace.package]
-version       = "0.1.2" # x-release-please-version
+version       = "0.2.0" # x-release-please-version
 authors       = ["Mike Grier"]
 edition       = "2024"
 rust-version  = "1.97"
