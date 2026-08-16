@@ -49,9 +49,10 @@ Use the **cargo-mcp** tools (never terminal `cargo`) and the **tpu-mcp** tools f
 file I/O (LF-only repo), per [.github/copilot-instructions.md](.github/copilot-instructions.md).
 Always pass the workspace root as `working_dir`.
 
-Milestone gate (both profiles, zero warnings): `cargo fmt`, `cargo clippy
---all-targets`, `cargo test`, then `cargo check --all-targets --release`. Do **not**
-add `--workspace` (respect `default-members`).
+Milestone gate (default workspace, zero warnings, **both** profiles): `cargo fmt`,
+`cargo check --all-targets` **and** `cargo check --all-targets --release`, plus
+`cargo clippy --all-targets` and `cargo test`. Do **not** add `--workspace` (respect
+`default-members`).
 
 ## Build & test — Linux (via WSL)
 
@@ -66,12 +67,13 @@ environment (it unblocked the native Linux backend, M5-5). Key facts:
 - **Repo mount**: the Windows drive is mounted at `/mnt/<drive>`, so this repo is at
   `/mnt/q/github/<repo-folder>` (adjust `<repo-folder>` after the rename/re-clone).
 
-**Sanctioned exception to the "never terminal `cargo`" rule** (see the Windows-host
-section above and [.github/copilot-instructions.md](.github/copilot-instructions.md)):
-the cargo-mcp tools drive the **host** (Windows) toolchain and cannot target the WSL
-Linux toolchain, so Linux validation is the *one* place terminal `cargo` is required —
-always via `wsl … bash -lc` with the isolated `CARGO_TARGET_DIR` below, never against
-the host `target/`. Host builds and tests still go exclusively through cargo-mcp.
+**Linux validation** is authoritative in **CI** (the Ubuntu matrix). Locally it uses
+terminal `cargo` inside WSL — the one sanctioned exception to the "never terminal
+`cargo`" rule, carved out in
+[.github/copilot-instructions.md](.github/copilot-instructions.md) because the cargo-mcp
+server drives the **host** (Windows) toolchain only and cannot target the WSL Linux
+toolchain. Always use the isolated `CARGO_TARGET_DIR` below, never the host `target/`;
+all host (Windows) builds and tests still go exclusively through cargo-mcp.
 
 Run the suite (replace the user and path as needed):
 
