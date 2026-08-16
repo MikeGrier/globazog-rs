@@ -131,7 +131,7 @@ is a [`CqItem`]:
 | `ContainerEnd(e)` | A directory subtree finished (bottom-up, 1:1 with its enter). |
 | `Error(e)` | A per-entry/-subtree failure (e.g. permission denied); the walk continues past it. The one exception is a fatal error (see `Failed` below), which stops the walk. |
 | `DecisionRequest(_)` | Reserved for `defer-to-client` (not yet emitted). |
-| `Blocked(b)` | A followed reparse point was **not** descended because it would escape the roots under `confine_to_roots` (`b.reason == RootEscape`); the walk continues (D-75). |
+| `Blocked(b)` | Under `confine_to_roots`, a followed reparse point was **not** descended because its real target resolves outside the roots — or could not be resolved (fail-closed) — reported as `b.reason == RootEscape`; the walk continues (D-75). |
 | `Terminal(t)` | The walk ended. Always the **last** item. `t.reason` is `Completed`, `Cancelled`, or `Failed` — a fatal error (currently a root that could not be enumerated) stopped the walk; its causing `Error` item lands immediately before this terminal. |
 
 Ordering guarantees you can rely on: a container's `ContainerEnter` precedes any
