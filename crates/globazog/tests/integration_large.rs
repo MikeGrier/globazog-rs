@@ -685,6 +685,58 @@ fn confine_reports_hardlinked_symlink_escape_twice() {
     assert_eq!(blocked, vec!["esc_a".to_string(), "esc_b".to_string()]);
 }
 
+#[cfg(unix)]
+#[test]
+fn confine_matches_escaping_link_name_but_not_its_target() {
+    use globazog::{BlockReason, FollowLinks};
+
+    // The reparse entry itself is unaffected — only the *descent* is declined (D-75) —
+    // so an escaping link named `escape` yields both a `Match` for `escape` and a
+    // `Blocked{RootEscape}`, while the target's `secret.dat` stays absent.
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(outside.path().join("secret.dat"), b"x").unwrap();
+    std::os::unix::fs::symlink(outside.path(), root.path().join("escape")).unwrap();
+
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .follow_links(FollowLinks::Always)
+        .confine_to_roots(true)
+        .pattern("**/*", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+
+    let match_names: Vec<String> = items
+        .iter()
+        .filter_map(|i| match i {
+            CqItem::Match(m) => Some(m.name.to_string_lossy().to_string()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        match_names.iter().any(|n| n == "escape"),
+        "escaping link name did not match: {match_names:?}"
+    );
+    assert!(
+        !match_names.iter().any(|n| n == "secret.dat"),
+        "escaped target contents appeared: {match_names:?}"
+    );
+
+    let blocked: Vec<(String, BlockReason)> = items
+        .iter()
+        .filter_map(|i| match i {
+            CqItem::Blocked(b) => Some((b.name.to_string_lossy().to_string(), b.reason)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        blocked,
+        vec![("escape".to_string(), BlockReason::RootEscape)]
+    );
+}
+
 /// Create a directory junction (a reparse point with the mount-point tag). Unlike a
 /// directory symlink, a junction needs no elevated privilege, so it works in a plain
 /// CI harness. Returns whether creation succeeded.
