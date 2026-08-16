@@ -20,7 +20,10 @@ pub enum Error {
     #[error("invalid option: {0}")]
     Options(String),
 
-    /// An I/O failure while establishing the query (e.g. opening a root).
+    /// An I/O failure while establishing the query. An unopenable *root* is **not**
+    /// this: `submit` returns before enumeration begins, so a root that cannot be
+    /// enumerated surfaces at runtime as a [`EntryError`] `CqItem::Error` followed by
+    /// `TerminalReason::Failed` (D-71).
     #[error("i/o error: {0}")]
     Io(#[from] std::io::Error),
 }
