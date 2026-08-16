@@ -113,7 +113,7 @@ jobs:
       # so a stray use of a newer-stable feature fails CI rather than
       # silently raising the floor for downstream consumers. Checked on both
       # platforms so a newer-stable API in the Windows-only backend is caught.
-      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       - name: cargo check (MSRV)
         run: cargo check --workspace --all-targets --locked
