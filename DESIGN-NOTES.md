@@ -1,6 +1,6 @@
 # globazog — Design Notes
 
-(Crate name **globazog**; repository is `globbinobulous-rs`.)
+(Crate name **globazog**; repository is `globazog-rs`.)
 
 Status: **implemented** — milestones **M1–M11** are complete (archived in
 [COMPLETED-CHECKLIST.md](COMPLETED-CHECKLIST.md); status index in [PLANS.md](PLANS.md)).

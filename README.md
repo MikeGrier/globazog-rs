@@ -1,8 +1,8 @@
 <!-- Copyright (c) 2026 Mike Grier -->
-# globbinobulous-rs
+# globazog-rs
 
-[![CI](https://github.com/MikeGrier/globbinobulous-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/MikeGrier/globbinobulous-rs/actions/workflows/ci.yml)
-[![release-please](https://github.com/MikeGrier/globbinobulous-rs/actions/workflows/release-please.yml/badge.svg)](https://github.com/MikeGrier/globbinobulous-rs/actions/workflows/release-please.yml)
+[![CI](https://github.com/MikeGrier/globazog-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/MikeGrier/globazog-rs/actions/workflows/ci.yml)
+[![release-please](https://github.com/MikeGrier/globazog-rs/actions/workflows/release-please.yml/badge.svg)](https://github.com/MikeGrier/globazog-rs/actions/workflows/release-please.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A high-performance, **Windows-first** globbing and directory-traversal library for

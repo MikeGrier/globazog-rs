@@ -115,8 +115,6 @@ Gating factors before a real publish:
 
 ## Post-rename follow-up
 
-The repository is being renamed to match the crate (`globazog`). After the rename,
-update the `repository` / `homepage` URLs in the root [Cargo.toml](Cargo.toml)
-(currently `github.com/MikeGrier/globbinobulous-rs`) and any doc cross-links to the
-new name. GitHub redirects keep the old URLs working in the meantime, so this is not
-urgent.
+The repository has been renamed to match the crate (`globazog-rs`). The
+`repository` / `homepage` URLs in the root [Cargo.toml](Cargo.toml) and the doc
+cross-links now use the new name; GitHub redirects keep any old URLs working.
