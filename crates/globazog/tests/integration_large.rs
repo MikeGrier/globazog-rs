@@ -634,6 +634,115 @@ fn confine_reports_each_escape_separately() {
     assert_eq!(blocked, vec!["esc_a".to_string(), "esc_b".to_string()]);
 }
 
+#[cfg(unix)]
+#[test]
+fn confine_reports_hardlinked_symlink_escape_twice() {
+    use globazog::FollowLinks;
+
+    // Two hard-linked names for the *same* escaping symlink share one filesystem
+    // identity. Confinement is checked before cycle detection consumes that identity,
+    // so both names are reported per-entry rather than the second being swallowed as a
+    // cycle (D-75).
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let link_a = root.path().join("esc_a");
+    std::os::unix::fs::symlink(outside.path(), &link_a).unwrap();
+    // `link(2)` on Linux does not follow the symlink: this is a second name for the
+    // symlink inode itself, giving both names the same file id.
+    fs::hard_link(&link_a, root.path().join("esc_b")).unwrap();
+
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .follow_links(FollowLinks::Always)
+        .confine_to_roots(true)
+        .pattern("**/*", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+    let mut blocked: Vec<String> = items
+        .iter()
+        .filter_map(|i| match i {
+            CqItem::Blocked(b) => Some(b.name.to_string_lossy().to_string()),
+            _ => None,
+        })
+        .collect();
+    blocked.sort();
+    assert_eq!(blocked, vec!["esc_a".to_string(), "esc_b".to_string()]);
+}
+
+/// Create a directory junction (a reparse point with the mount-point tag). Unlike a
+/// directory symlink, a junction needs no elevated privilege, so it works in a plain
+/// CI harness. Returns whether creation succeeded.
+#[cfg(windows)]
+fn make_junction(link: &std::path::Path, target: &std::path::Path) -> bool {
+    std::process::Command::new("cmd")
+        .arg("/C")
+        .arg("mklink")
+        .arg("/J")
+        .arg(link)
+        .arg(target)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+#[test]
+fn confine_to_roots_blocks_junction_escape() {
+    use globazog::{BlockReason, FollowLinks};
+
+    // Windows coverage for the junction / canonical-`\\?\`-prefix + case-fold path
+    // (D-75): an escaping junction is declined, an in-root junction is followed.
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(outside.path().join("secret.dat"), b"x").unwrap();
+
+    let inside = root.path().join("inside");
+    fs::create_dir(&inside).unwrap();
+    fs::write(inside.join("in.dat"), b"x").unwrap();
+
+    if !make_junction(&root.path().join("escape"), outside.path()) {
+        return; // junction creation unsupported in this environment; nothing to verify
+    }
+    assert!(make_junction(&root.path().join("stay"), &inside));
+
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .follow_links(FollowLinks::Always)
+        .confine_to_roots(true)
+        .pattern("**/*.dat", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+
+    let names: Vec<String> = items
+        .iter()
+        .filter_map(|i| match i {
+            CqItem::Match(m) => Some(m.name.to_string_lossy().to_string()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        !names.iter().any(|n| n == "secret.dat"),
+        "escaping junction was followed under confinement: {names:?}"
+    );
+    assert!(names.iter().any(|n| n == "in.dat"));
+
+    let blocked: Vec<String> = items
+        .iter()
+        .filter_map(|i| match i {
+            CqItem::Blocked(b) => {
+                assert_eq!(b.reason, BlockReason::RootEscape);
+                Some(b.name.to_string_lossy().to_string())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(blocked, vec!["escape".to_string()]);
+}
+
 #[test]
 fn cancellation_still_balances_container_ends() {
     // Even when cancelled mid-flight, every `ContainerEnter` must get a
