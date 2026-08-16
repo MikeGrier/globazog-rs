@@ -12,7 +12,10 @@ use std::time::Instant;
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let dir = args.next().unwrap_or_else(|| ".".to_string());
+    let dir_arg = args.next().unwrap_or_else(|| ".".to_string());
+    // Roots must be absolute (D-74); resolve the CLI argument against one CWD snapshot
+    // (an absolute argument replaces the snapshot).
+    let dir = std::env::current_dir().expect("current dir").join(&dir_arg);
     let mut patterns: Vec<String> = args.collect();
     if patterns.is_empty() {
         patterns = vec!["**/*.rs".to_string(), "**/*.md".to_string()];
