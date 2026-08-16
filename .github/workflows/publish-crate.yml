@@ -26,7 +26,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       # Guard against a manual or mistyped tag publishing an unintended version:
       # the `v*` tag must name the crate's own version, or we refuse to publish.
       - name: Verify tag matches crate version
