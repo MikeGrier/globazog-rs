@@ -358,7 +358,11 @@ pub enum CqItem {
 /// A descent the engine declined rather than followed (D-75): informational — the
 /// walk continues past it and there is no override. Currently only root confinement
 /// (`confine_to_roots`) produces one.
+///
+/// `#[non_exhaustive]`: a future override (D-75) may add a decision-token field, so
+/// downstream code must not construct or exhaustively destructure this struct.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Blocked {
     /// The container being scanned when the descent was declined.
     pub container: ContainerId,
