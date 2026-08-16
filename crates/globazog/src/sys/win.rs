@@ -40,11 +40,14 @@ pub fn enumerate_dir_native(path: &Path, plan: EnumPlan) -> io::Result<DirScan> 
     let raw = dir.as_raw_handle() as HANDLE;
     // The volume serial is a *separate* `FileIdInfo` query (not part of the inline
     // directory listing), so only pay it — and only risk a redirector that does not
-    // support it — when a file identity was actually requested (D-62).
+    // support it — when a file identity was actually requested (D-62). A redirector
+    // can list a directory yet reject this class; treat that as identity-unavailable
+    // (unknown id, cycle-detection pass-through per D-51) rather than failing the
+    // whole enumeration.
     let volume = if plan.wants_any_file_id() {
-        volume_serial(raw)?
+        volume_serial(raw).ok()
     } else {
-        0
+        None
     };
 
     // A u64 buffer guarantees 8-byte alignment for the i64 fields; the API keeps
@@ -140,7 +143,12 @@ fn volume_serial(handle: HANDLE) -> io::Result<u64> {
     Ok(info.VolumeSerialNumber)
 }
 
-fn make_entry(rec: &FILE_ID_EXTD_DIR_INFO, name: &[u16], volume: u64, plan: EnumPlan) -> DirEntry {
+fn make_entry(
+    rec: &FILE_ID_EXTD_DIR_INFO,
+    name: &[u16],
+    volume: Option<u64>,
+    plan: EnumPlan,
+) -> DirEntry {
     let attrs = rec.FileAttributes;
     let entry_type = if attrs & FILE_ATTRIBUTE_DIRECTORY != 0 {
         EntryType::Dir
@@ -159,16 +167,16 @@ fn make_entry(rec: &FILE_ID_EXTD_DIR_INFO, name: &[u16], volume: u64, plan: Enum
         mtime: filetime_to_unix_nanos(rec.LastWriteTime),
         atime: filetime_to_unix_nanos(rec.LastAccessTime),
         ctime: filetime_to_unix_nanos(rec.ChangeTime),
-        // File identity is only meaningful with the volume serial (D-62); when this
-        // entry's id was not requested, leave it unset so cycle detection treats it
-        // as unknown.
-        file_id: if plan.wants_file_id_for(is_reparse) {
-            FileId {
-                volume,
+        // File identity is only meaningful with the volume serial (D-62). Leave it
+        // unset — so cycle detection treats it as unknown — when this entry's id was
+        // not requested, or the `FileIdInfo` class was unavailable (volume `None`);
+        // an id without its volume is not globally unique.
+        file_id: match volume {
+            Some(vol) if plan.wants_file_id_for(is_reparse) => FileId {
+                volume: vol,
                 id: file_id_128(&rec.FileId),
-            }
-        } else {
-            FileId { volume: 0, id: 0 }
+            },
+            _ => FileId { volume: 0, id: 0 },
         },
     }
 }
