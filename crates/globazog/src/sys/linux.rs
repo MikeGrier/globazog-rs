@@ -139,9 +139,17 @@ fn make_entry(name: &CStr, st: &Statx) -> DirEntry {
         mtime: statx_time(st, StatxFlags::MTIME, st.stx_mtime),
         atime: statx_time(st, StatxFlags::ATIME, st.stx_atime),
         ctime: statx_time(st, StatxFlags::CTIME, st.stx_ctime),
-        file_id: FileId {
-            volume,
-            id: u128::from(st.stx_ino),
+        // `stx_ino` is valid only when the kernel set STATX_INO; without it a
+        // `(volume, 0)` key would collide across distinct files on this filesystem and
+        // wrongly trip cycle detection, so fall back to the unknown sentinel (D-51,
+        // and the FileId `{0,0}`-means-unknown contract).
+        file_id: if StatxFlags::from_bits_truncate(st.stx_mask).contains(StatxFlags::INO) {
+            FileId {
+                volume,
+                id: u128::from(st.stx_ino),
+            }
+        } else {
+            FileId { volume: 0, id: 0 }
         },
     }
 }
