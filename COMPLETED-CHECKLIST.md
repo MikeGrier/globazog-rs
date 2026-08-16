@@ -307,10 +307,12 @@ not drop its readable siblings (a bug against the *existing* D-53 per-entry cont
 - [x] **M12-2. `CqItem::Blocked` + `BlockReason`** (D-75): added the CQ variant, the
   `Blocked { container, name, reason }` struct, and the `#[non_exhaustive]`
   `BlockReason::RootEscape` enum; re-exported from the crate root; updated the CqItem
-  doc tables (lib.rs / README).
+  doc tables ([lib.rs](crates/globazog/src/lib.rs) / [README.md](crates/globazog/README.md)).
 
 - [x] **M12-3. Engine confinement check** (D-75): roots canonicalized once at spawn
-  (when confine on); at a reparse-point descend candidate, the target is canonicalized
+  (only when confinement is on **and** `FollowLinks::Always` is selected, so the check
+  is inert under `Never`); at a reparse-point descend candidate, the target is
+  canonicalized
   and the descent declined (emit `Blocked{RootEscape}`, skip `launch_child`) when it is
   not within a canonical root or cannot be resolved (fail-closed). Component-wise
   ancestor test with the D-28 fold, reusing `sys::decode_name` + `matcher::fold`.
