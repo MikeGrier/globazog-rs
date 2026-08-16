@@ -492,6 +492,148 @@ fn confine_to_roots_blocks_symlink_escape() {
     assert!(!items.iter().any(|i| matches!(i, CqItem::Blocked(_))));
 }
 
+#[cfg(unix)]
+#[test]
+fn confine_fail_closed_on_broken_symlink() {
+    use globazog::{BlockReason, FollowLinks};
+
+    // A dangling symlink: its target does not exist, so `canonicalize` fails and the
+    // fail-closed policy declines it as RootEscape rather than following it (D-75).
+    let root = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink("/no/such/globazog/target", root.path().join("broken")).unwrap();
+
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .follow_links(FollowLinks::Always)
+        .confine_to_roots(true)
+        .pattern("**/*", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+    let blocks: Vec<&CqItem> = items
+        .iter()
+        .filter(|i| matches!(i, CqItem::Blocked(_)))
+        .collect();
+    assert_eq!(blocks.len(), 1);
+    let CqItem::Blocked(b) = blocks[0] else {
+        unreachable!()
+    };
+    assert_eq!(b.reason, BlockReason::RootEscape);
+    assert_eq!(b.name.to_string_lossy(), "broken");
+}
+
+#[cfg(unix)]
+#[test]
+fn confine_is_inert_under_follow_never() {
+    // `FollowLinks::Never` (default): reparse points are never followed, so the
+    // confinement check never runs — no `Blocked`, and the escaping target is unseen.
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(outside.path().join("secret.dat"), b"x").unwrap();
+    std::os::unix::fs::symlink(outside.path(), root.path().join("escape")).unwrap();
+
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .confine_to_roots(true)
+        .pattern("**/*.dat", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+    assert!(!items.iter().any(|i| matches!(i, CqItem::Blocked(_))));
+    assert!(
+        !items
+            .iter()
+            .any(|i| matches!(i, CqItem::Match(m) if m.name.to_string_lossy() == "secret.dat"))
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn confine_boundary_and_multiple_roots() {
+    use globazog::{BlockReason, FollowLinks};
+
+    // Two roots. A link into the *second* root is allowed; a link to a sibling whose
+    // name string-*prefixes* a root is an escape — containment is component-wise, not a
+    // string prefix (D-75).
+    let base = tempfile::tempdir().unwrap();
+    let root_a = base.path().join("root");
+    let root_b = base.path().join("other");
+    let sibling = base.path().join("rootsibling"); // string-prefixes "root"
+    fs::create_dir(&root_a).unwrap();
+    fs::create_dir(&root_b).unwrap();
+    fs::create_dir(&sibling).unwrap();
+    fs::write(root_b.join("b.dat"), b"x").unwrap();
+    fs::write(sibling.join("s.dat"), b"x").unwrap();
+    std::os::unix::fs::symlink(&root_b, root_a.join("to_b")).unwrap();
+    std::os::unix::fs::symlink(&sibling, root_a.join("to_sib")).unwrap();
+
+    let handle = QueryBuilder::new()
+        .root(&root_a)
+        .root(&root_b)
+        .follow_links(FollowLinks::Always)
+        .confine_to_roots(true)
+        .pattern("**/*.dat", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+
+    let names: Vec<String> = items
+        .iter()
+        .filter_map(|i| match i {
+            CqItem::Match(m) => Some(m.name.to_string_lossy().to_string()),
+            _ => None,
+        })
+        .collect();
+    // `to_b` resolves into a supplied root → allowed; the string-prefix sibling is not.
+    assert!(names.iter().any(|n| n == "b.dat"));
+    assert!(!names.iter().any(|n| n == "s.dat"));
+    let blocked: Vec<String> = items
+        .iter()
+        .filter_map(|i| match i {
+            CqItem::Blocked(b) => {
+                assert_eq!(b.reason, BlockReason::RootEscape);
+                Some(b.name.to_string_lossy().to_string())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(blocked, vec!["to_sib".to_string()]);
+}
+
+#[cfg(unix)]
+#[test]
+fn confine_reports_each_escape_separately() {
+    use globazog::FollowLinks;
+
+    // Two distinct escaping links each get their own `Blocked` (no dedup swallowing).
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(outside.path(), root.path().join("esc_a")).unwrap();
+    std::os::unix::fs::symlink(outside.path(), root.path().join("esc_b")).unwrap();
+
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .follow_links(FollowLinks::Always)
+        .confine_to_roots(true)
+        .pattern("**/*", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+    let mut blocked: Vec<String> = items
+        .iter()
+        .filter_map(|i| match i {
+            CqItem::Blocked(b) => Some(b.name.to_string_lossy().to_string()),
+            _ => None,
+        })
+        .collect();
+    blocked.sort();
+    assert_eq!(blocked, vec!["esc_a".to_string(), "esc_b".to_string()]);
+}
+
 #[test]
 fn cancellation_still_balances_container_ends() {
     // Even when cancelled mid-flight, every `ContainerEnter` must get a
