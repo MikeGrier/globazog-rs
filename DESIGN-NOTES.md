@@ -274,9 +274,9 @@ escaping that follows.
   utility's job; mid-pattern literal pruning stays engine-core** (e.g. `foo` in
   `**/foo/*.c`).
 - **D-35. Canonicalization is owned, not delegated.**
-  **Partially realized** — the builder currently deduplicates only byte-for-byte-equal
-  root paths; the owned lexical canonicalization below is tracked in
-  [CHECKLIST.md](CHECKLIST.md) → M11. No `GetFullPathName` (CWD /
+  **Realized** — root dedup/overlap uses the owned lexical key of D-73 (`.`-fold,
+  separator-fold via `Path::components`, Windows case-fold, `..`-reject). No
+  `GetFullPathName` (CWD /
   per-drive globals; strips trailing dots/spaces) and no blind delegation to
   lexical canonicalizers like `PathCchCanonicalizeEx` (they **resolve `..`**,
   contradicting D-26). Root canonicalization (for **anchor dedup/merge**) lives in
@@ -290,10 +290,10 @@ escaping that follows.
 - **D-36. The unit of matching is a *set* of patterns over a *set* of roots.**
   Single-pattern is the degenerate N=1 case. `*.c*` + `*.h*` enumerates **once**.
 - **D-37. One deduplicated traversal.**
-  **Partially realized** — the builder currently deduplicates only byte-for-byte-equal
-  root paths, so lexically-equivalent (`.`-fold / separator / platform-case) and
-  ancestor/descendant-overlapping roots are **not** yet collapsed; full realization is
-  tracked in [CHECKLIST.md](CHECKLIST.md) → M11. Each pattern contributes a
+  **Partially realized** — roots are deduped on the owned lexical key and **overlapping
+  supplied roots are rejected** (D-73); the full ancestor/descendant *merge* (enumerate
+  once, emit under every applicable `(root, rel)` frame) needs a multi-frame directory
+  model and is deferred. Each pattern contributes a
   literal-prefix **anchor**; shared-prefix anchors **merge** into one seek, divergent
   anchors **fork**; overlapping roots/anchors collapse (no directory enumerated twice).
 - **D-38. Relative patterns are root-independent templates applied at every root**
@@ -529,6 +529,20 @@ escaping that follows.
   `Dir`+reparse); it now defaults to `Never` too, so both platforms are consistent.
   `FollowLinks` is an enum, not a bool, to leave room for a future policy (e.g.
   same-volume-only) without an ABI break.
+- **D-73. Overlapping supplied roots are rejected, not merged (M11).** Root paths are
+  deduplicated on an **owned lexical key** (D-35): fold `.`, normalize separators (via
+  `Path::components`), and case-fold on Windows (D-28); a `..` component is **rejected**
+  (D-26/D-35 reject-not-resolve), which also keeps overlap detection sound. If one
+  *supplied* root is a lexical ancestor of another (e.g. `.root("/tmp").root("/tmp/sub")`),
+  `build()` returns `Error::Options` rather than silently dropping one — dropping would
+  change the **match set**, not just paths (a non-recursive pattern like `*.c` matches
+  under the deeper root but not the shallower, since the shallower sees it two segments
+  deep). The full D-37 "enumerate once, emit under every applicable `(root, rel)` frame"
+  merge needs a multi-frame directory model and is deferred (tracked in
+  [CHECKLIST.md](CHECKLIST.md) → M11 history). **Derived** roots from anchored patterns
+  (D-38) are canonicalized and deduped the same way but are **not** overlap-rejected:
+  they carry distinct applicable-pattern sets and legitimately nest under a supplied root
+  (the anchored + relative mix), so they keep their own per-root enumeration.
 - **D-69. Ring implementation choices (M6).** The ring/API surface is realized with
   three v1 simplifications, each an owned decision (not a delegation) with a named
   reason and a deferral gated on a real factor, not on "no consumer":

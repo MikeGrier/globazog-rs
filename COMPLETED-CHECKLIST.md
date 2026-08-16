@@ -275,3 +275,25 @@ not drop its readable siblings (a bug against the *existing* D-53 per-entry cont
   following is on; Windows no longer auto-follows dir-symlinks by default). Unit test
   (default `Never`) + unix integration test (a symlinked dir is descended only under
   `Always`).
+
+## Moved 2026-08-15 — M11 (root lexical canonicalization + overlapping-root rejection, D-73)
+
+- [x] **M11-1. Decide overlapping-root semantics** (D-73): resolved to *reject*
+  overlapping **supplied** roots rather than silently drop or merge — dropping the
+  descendant changes the match set (a non-recursive `*.c` matches under the deeper
+  root but not the shallower), and the full enumerate-once/emit-under-both merge needs
+  a multi-frame model (deferred to M∞-3). Recorded as **D-73** in
+  [DESIGN-NOTES.md](DESIGN-NOTES.md); D-35/D-37 status markers updated.
+
+- [x] **M11-2. Owned lexical root canonicalization**: `builder::canon_key` folds `.`,
+  normalizes separators via `Path::components`, case-folds on Windows (D-28), and
+  rejects `..` (D-26/D-35). `intern_root` dedups supplied and derived roots on that
+  key (so `/data` ≡ `/data/.`, and `C:/Data` ≡ `C:/data` on Windows). Builder unit
+  tests: `lexically_equal_roots_are_deduped`, `parent_dir_in_root_is_rejected`,
+  `windows_roots_dedup_case_insensitively`.
+
+- [x] **M11-3. Reject ancestor/descendant supplied-root overlap** (superseding the
+  original "merge" plan per D-73): `build()` returns `Error::Options` when one supplied
+  root is a lexical ancestor of another; derived (anchored-pattern) roots are exempt.
+  Tests: `nested_supplied_roots_are_rejected`, `sibling_supplied_roots_are_allowed`.
+  The full multi-frame merge is deferred to M∞-3.
