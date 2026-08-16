@@ -314,8 +314,10 @@ not drop its readable siblings (a bug against the *existing* D-53 per-entry cont
   is inert under `Never`); at a reparse-point descend candidate, the target is
   canonicalized
   and the descent declined (emit `Blocked{RootEscape}`, skip `launch_child`) when it is
-  not within a canonical root or cannot be resolved (fail-closed). Component-wise
-  ancestor test with the D-28 fold, reusing `sys::decode_name` + `matcher::fold`.
+  not within a canonical root or cannot be resolved (fail-closed). Exact component-wise
+  ancestor test (no case fold) over `sys::decode_name` components — `canonicalize`
+  already returns true on-disk casing, so a fold would let case-only sibling dirs
+  (`Foo`/`foo`) escape.
 
 - [x] **M12-4. Tests** (D-75): unix integration `confine_to_roots_blocks_symlink_escape`
   — an escaping symlink is not descended and yields exactly one `Blocked{RootEscape}`

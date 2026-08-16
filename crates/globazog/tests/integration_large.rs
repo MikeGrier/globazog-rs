@@ -758,7 +758,7 @@ fn make_junction(link: &std::path::Path, target: &std::path::Path) -> bool {
 fn confine_to_roots_blocks_junction_escape() {
     use globazog::{BlockReason, FollowLinks};
 
-    // Windows coverage for the junction / canonical-`\\?\`-prefix + case-fold path
+    // Windows coverage for the junction / canonical-`\\?\`-prefix exact-compare path
     // (D-75): an escaping junction is declined, an in-root junction is followed.
     let root = tempfile::tempdir().unwrap();
     let outside = tempfile::tempdir().unwrap();
