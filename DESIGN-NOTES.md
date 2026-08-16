@@ -558,6 +558,36 @@ escaping that follows.
   Resolution is the caller's job at their edge (e.g. `std::env::current_dir()?`),
   matching the D-34 "one honest one-shot CWD read at the caller's edge" stance. This
   supersedes the old convenience of a bare `.root(\".\")`, which now errors.
+- **D-75. Root confinement against reparse-point escape.** `Options.confine_to_roots`
+  (default `false`) bounds a `FollowLinks::Always` walk to the query roots: a followed
+  reparse point (symlink / junction) whose **real, canonicalized target** resolves
+  outside every root's canonicalized subtree is **not descended**; the engine instead
+  emits a `CqItem::Blocked { reason: BlockReason::RootEscape }` naming the undescended
+  entry and continues. Containment is checked by canonicalizing the roots once (at
+  engine spawn) and each candidate target on demand (`std::fs::canonicalize`), then an
+  **exact** component-wise ancestor test — **no** case fold. `canonicalize` (on Windows
+  `GetFinalPathNameByHandle`) already returns every component in its true on-disk
+  casing, so a case-insensitive volume matches its root by that stored casing while
+  genuinely distinct siblings on a per-directory-case-sensitive tree (`Foo` vs `foo`,
+  common under WSL-managed dirs) stay distinct; applying the D-28 fold here would
+  collapse such siblings and let a reparse point targeting `foo` escape a root at `Foo`.
+  Both sides go through `canonicalize`, so the Windows `\\?\` prefix is consistent.
+  **Fail-closed:** a target
+  that cannot be canonicalized (broken / inaccessible) is also declined as `RootEscape`,
+  so a confinement-enabled walk never follows a reparse point it cannot prove stays
+  inside. The check runs only for reparse candidates, so it is inert under
+  `FollowLinks::Never` and off by default; matching the reparse *entry* itself is
+  unaffected (only the descent is declined). There is **no** client override — a
+  bounding use just wants the cut-off; a future opt-in override could layer the D-58
+  decision machinery. **Limitation (TOCTOU):** the check canonicalizes the link path,
+  but the synchronous backend's full-path open (M5-4) re-resolves that path when it
+  enumerates the target *later*; an adversary who swaps the link (or a mutable ancestor)
+  between check and open can still escape. Confinement is therefore a best-effort bound
+  against symlink misconfiguration / accidental escape, **not** an adversary-hardened
+  boundary. A race-free version ties the check and the open to the *same* filesystem
+  object (handle-relative / `openat`-no-follow resolution in both backends), tracked with
+  the M7-6 relative-open work. Alternatives and tradeoffs:
+  [DESIGN-RATIONALE.md](DESIGN-RATIONALE.md) → D-75.
 - **D-69. Ring implementation choices (M6).** The ring/API surface is realized with
   three v1 simplifications, each an owned decision (not a delegation) with a named
   reason and a deferral gated on a real factor, not on "no consumer":

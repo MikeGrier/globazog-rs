@@ -332,7 +332,11 @@ pub struct Terminal {
 }
 
 /// One completion-queue item (D-64, D-65). Owned; popped by value (D-68).
+///
+/// `#[non_exhaustive]`: the CQ stream is expected to grow new item kinds, so match it
+/// with a wildcard arm and treat unknown items as ignorable.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum CqItem {
     /// A directory scan started.
     ContainerEnter(ContainerEnter),
@@ -345,8 +349,36 @@ pub enum CqItem {
     Error(CqError),
     /// A `defer-to-client` escalation.
     DecisionRequest(DecisionRequest),
+    /// A reparse-point descent the engine declined (D-75); the walk continues.
+    Blocked(Blocked),
     /// The terminal completion/cancellation marker.
     Terminal(Terminal),
+}
+
+/// A descent the engine declined rather than followed (D-75): informational — the
+/// walk continues past it and there is no override. Currently only root confinement
+/// (`confine_to_roots`) produces one.
+///
+/// `#[non_exhaustive]`: a future override (D-75) may add a decision-token field, so
+/// downstream code must not construct or exhaustively destructure this struct.
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct Blocked {
+    /// The container being scanned when the descent was declined.
+    pub container: ContainerId,
+    /// The reparse-point entry that was not descended.
+    pub name: Name,
+    /// Why the descent was declined.
+    pub reason: BlockReason,
+}
+
+/// Why a descent was declined (D-75).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum BlockReason {
+    /// Under `confine_to_roots`, the reparse point's real target resolves outside every
+    /// query root (or could not be confirmed within one), so it was not followed.
+    RootEscape,
 }
 
 /// The client's answer to a [`DecisionRequest`] (D-58).

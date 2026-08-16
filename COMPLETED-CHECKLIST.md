@@ -297,3 +297,29 @@ not drop its readable siblings (a bug against the *existing* D-53 per-entry cont
   root is a lexical ancestor of another; derived (anchored-pattern) roots are exempt.
   Tests: `nested_supplied_roots_are_rejected`, `sibling_supplied_roots_are_allowed`.
   The full multi-frame merge is deferred to M∞-3.
+
+## Moved 2026-08-16 — M12 (root confinement against reparse-point escape, D-75)
+
+- [x] **M12-1. `Options.confine_to_roots` + builder** (D-75): added the bool option
+  (default `false`), the `QueryBuilder::confine_to_roots` setter, and threaded it into
+  `Query`. Unit test: `confine_to_roots_defaults_off_and_is_settable`.
+
+- [x] **M12-2. `CqItem::Blocked` + `BlockReason`** (D-75): added the CQ variant, the
+  `Blocked { container, name, reason }` struct, and the `#[non_exhaustive]`
+  `BlockReason::RootEscape` enum; re-exported from the crate root; updated the CqItem
+  doc tables ([lib.rs](crates/globazog/src/lib.rs) / [README.md](crates/globazog/README.md)).
+
+- [x] **M12-3. Engine confinement check** (D-75): roots canonicalized once at spawn
+  (only when confinement is on **and** `FollowLinks::Always` is selected, so the check
+  is inert under `Never`); at a reparse-point descend candidate, the target is
+  canonicalized
+  and the descent declined (emit `Blocked{RootEscape}`, skip `launch_child`) when it is
+  not within a canonical root or cannot be resolved (fail-closed). Exact component-wise
+  ancestor test (no case fold) over `sys::decode_name` components — `canonicalize`
+  already returns true on-disk casing, so a fold would let case-only sibling dirs
+  (`Foo`/`foo`) escape.
+
+- [x] **M12-4. Tests** (D-75): unix integration `confine_to_roots_blocks_symlink_escape`
+  — an escaping symlink is not descended and yields exactly one `Blocked{RootEscape}`
+  naming it, an in-root symlink is still followed, and with `confine_to_roots(false)` the
+  escaping link is followed and no `Blocked` is emitted.

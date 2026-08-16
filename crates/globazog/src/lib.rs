@@ -50,6 +50,10 @@
 //! - [`CqItem::Error`] — a per-entry or per-directory failure (e.g. permission
 //!   denied, or an entry that vanished mid-scan); the walk continues past it (D-53).
 //!   A single unreadable entry never discards its readable siblings.
+//! - [`CqItem::Blocked`] — under [`confine_to_roots`](Options::confine_to_roots), a
+//!   followed reparse point (symlink / junction) was **not** descended because its
+//!   real target resolves outside the query roots, or could not be resolved
+//!   (fail-closed); the walk continues (D-75).
 //! - [`CqItem::Terminal`] — the walk ended:
 //!   [`Completed`](TerminalReason::Completed) (ran to the end),
 //!   [`Cancelled`](TerminalReason::Cancelled) (a [`cancel`](QueryHandle::cancel) was
@@ -75,7 +79,9 @@
 //! request is honored before the walk finishes, or `Completed` if the cancel lost the
 //! race with normal completion (so a `Completed` after a `cancel()` is **not** a
 //! contract violation). Dropping the handle cancels and joins the engine threads. See
-//! [`Options`] to tune the permit count, ring capacity, and cycle detection.
+//! [`Options`] to tune the permit count, ring capacity, cycle detection, the
+//! `follow_links` reparse policy, and `confine_to_roots` (keep a followed link from
+//! escaping the roots, D-75).
 //!
 //! # Dialects and brace escaping (D-45)
 //!
@@ -105,9 +111,9 @@ pub use builder::{FollowLinks, Options, PatternEntry, Query, QueryBuilder, Query
 pub use error::{EntryError, Error};
 pub use predicate::{Cmp, EntryType, Leaf, MetaMask, TimeField};
 pub use ring::{
-    CompletionRing, ContainerEnd, ContainerEnter, ContainerId, ContainerName, CqError, CqItem,
-    Decision, DecisionRequest, DecisionToken, EntryMetaOwned, Match, Name, PatternMask,
-    SubmissionQueue, Terminal, TerminalReason,
+    BlockReason, Blocked, CompletionRing, ContainerEnd, ContainerEnter, ContainerId, ContainerName,
+    CqError, CqItem, Decision, DecisionRequest, DecisionToken, EntryMetaOwned, Match, Name,
+    PatternMask, SubmissionQueue, Terminal, TerminalReason,
 };
 pub use syntax::CaseSensitivity;
 pub use syntax::dialect::Dialect;
