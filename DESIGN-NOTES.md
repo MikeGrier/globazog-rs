@@ -573,7 +573,15 @@ escaping that follows.
   `FollowLinks::Never` and off by default; matching the reparse *entry* itself is
   unaffected (only the descent is declined). There is **no** client override — a
   bounding use just wants the cut-off; a future opt-in override could layer the D-58
-  decision machinery.
+  decision machinery. **Limitation (TOCTOU):** the check canonicalizes the link path,
+  but the synchronous backend's full-path open (M5-4) re-resolves that path when it
+  enumerates the target *later*; an adversary who swaps the link (or a mutable ancestor)
+  between check and open can still escape. Confinement is therefore a best-effort bound
+  against symlink misconfiguration / accidental escape, **not** an adversary-hardened
+  boundary. A race-free version ties the check and the open to the *same* filesystem
+  object (handle-relative / `openat`-no-follow resolution in both backends), tracked with
+  the M7-6 relative-open work. Alternatives and tradeoffs:
+  [DESIGN-RATIONALE.md](DESIGN-RATIONALE.md) → D-75.
 - **D-69. Ring implementation choices (M6).** The ring/API surface is realized with
   three v1 simplifications, each an owned decision (not a delegation) with a named
   reason and a deferral gated on a real factor, not on "no consumer":

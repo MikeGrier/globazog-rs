@@ -27,8 +27,12 @@ completed M7.
   layer, so the tests belong here). Re-introduce the SQ **query-submission (boot) op**
   here — it was removed from the synchronous engine as inert (the sync engine boots
   directly via `QueryBuilder::submit`); the reactor model is where an SQ-driven submit
-  becomes meaningful (D-66). **Gated on** building the D-5 completion abstraction + the
-  native async FFI, not a missing consumer.
+  becomes meaningful (D-66). This handle-relative open also **closes the D-75
+  confinement TOCTOU**: run the containment check on the *opened* target handle (its
+  canonical path via the handle) so the check and the enumeration act on the same
+  filesystem object, instead of canonicalizing a path and re-opening it later. **Gated
+  on** building the D-5 completion abstraction + the native async FFI, not a missing
+  consumer.
 
 - [ ] **M7-7. `defer-to-client` predicate escalation** (D-58): add a **tri-state**
   predicate leaf (accept / reject / defer) to the M4 vocabulary; on defer, emit a
