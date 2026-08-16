@@ -299,6 +299,24 @@ fn windows_roots_dedup_case_insensitively() {
     assert_eq!(q.roots.len(), 1);
 }
 
+#[cfg(windows)]
+#[test]
+fn windows_roots_with_distinct_unpaired_surrogates_stay_separate() {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    // Two roots differing only in an unpaired surrogate must stay distinct: keying on
+    // `to_string_lossy` would collapse both to U+FFFD and wrongly merge them (D-46).
+    let a = OsString::from_wide(&[b'r' as u16, 0xD800]);
+    let b = OsString::from_wide(&[b'r' as u16, 0xDC00]);
+    let q = QueryBuilder::new()
+        .root(a)
+        .root(b)
+        .pattern("*.c", Dialect::Posix, empty_emit())
+        .build()
+        .unwrap();
+    assert_eq!(q.roots.len(), 2);
+}
+
 #[test]
 fn zero_ring_capacity_is_rejected() {
     let opts = Options {

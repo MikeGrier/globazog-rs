@@ -254,7 +254,7 @@ fn nanos(t: io::Result<SystemTime>) -> i64 {
     }
 }
 
-fn decode_name(os: &std::ffi::OsStr) -> Vec<CodePoint> {
+pub(crate) fn decode_name(os: &std::ffi::OsStr) -> Vec<CodePoint> {
     #[cfg(windows)]
     {
         use std::os::windows::ffi::OsStrExt;

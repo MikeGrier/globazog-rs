@@ -13,7 +13,7 @@ mod tests;
 /// Windows OS uppercase table (D-28), matching `CompareStringOrdinal(bIgnoreCase)`.
 /// Only BMP code points map; surrogate / supplementary / escaped values fold to
 /// themselves.
-fn fold(cp: CodePoint) -> CodePoint {
+pub(crate) fn fold(cp: CodePoint) -> CodePoint {
     if cp <= 0xFFFF {
         let unit = cp as u16;
         match super::upcase::UPCASE.binary_search_by_key(&unit, |&(from, _)| from) {
