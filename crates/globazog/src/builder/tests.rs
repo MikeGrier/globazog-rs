@@ -190,6 +190,24 @@ fn follow_links_defaults_to_never_and_is_settable() {
     assert_eq!(q.options.follow_links, FollowLinks::Always);
 }
 
+#[test]
+fn confine_to_roots_defaults_off_and_is_settable() {
+    let q = QueryBuilder::new()
+        .root(aroot("/data"))
+        .pattern("*.txt", Dialect::Posix, empty_emit())
+        .build()
+        .unwrap();
+    assert!(!q.options.confine_to_roots);
+
+    let q = QueryBuilder::new()
+        .root(aroot("/data"))
+        .confine_to_roots(true)
+        .pattern("*.txt", Dialect::Posix, empty_emit())
+        .build()
+        .unwrap();
+    assert!(q.options.confine_to_roots);
+}
+
 #[cfg(windows)]
 #[test]
 fn win_drive_absolute_peels_into_drive_root() {

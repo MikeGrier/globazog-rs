@@ -6,6 +6,8 @@ the design rationale is in [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
 ## M7+ — Engine follow-ups (parked, gated beyond completed M7)
 
+## M7+ — Engine follow-ups (parked, gated beyond completed M7)
+
 These are **parked, not pending**: milestone M7 is complete and archived in
 [COMPLETED-CHECKLIST.md](COMPLETED-CHECKLIST.md). The two items below are gated on
 deliverables that do not yet exist (the native async backends / the D-5 completion

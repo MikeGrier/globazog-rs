@@ -558,6 +558,22 @@ escaping that follows.
   Resolution is the caller's job at their edge (e.g. `std::env::current_dir()?`),
   matching the D-34 "one honest one-shot CWD read at the caller's edge" stance. This
   supersedes the old convenience of a bare `.root(\".\")`, which now errors.
+- **D-75. Root confinement against reparse-point escape.** `Options.confine_to_roots`
+  (default `false`) bounds a `FollowLinks::Always` walk to the query roots: a followed
+  reparse point (symlink / junction) whose **real, canonicalized target** resolves
+  outside every root's canonicalized subtree is **not descended**; the engine instead
+  emits a `CqItem::Blocked { reason: BlockReason::RootEscape }` naming the undescended
+  entry and continues. Containment is checked by canonicalizing the roots once (at
+  engine spawn) and each candidate target on demand (`std::fs::canonicalize`), then a
+  component-wise ancestor test under the D-28 case fold (both sides go through
+  `canonicalize`, so the Windows `\\?\` prefix is consistent). **Fail-closed:** a target
+  that cannot be canonicalized (broken / inaccessible) is also declined as `RootEscape`,
+  so a confinement-enabled walk never follows a reparse point it cannot prove stays
+  inside. The check runs only for reparse candidates, so it is inert under
+  `FollowLinks::Never` and off by default; matching the reparse *entry* itself is
+  unaffected (only the descent is declined). There is **no** client override — a
+  bounding use just wants the cut-off; a future opt-in override could layer the D-58
+  decision machinery.
 - **D-69. Ring implementation choices (M6).** The ring/API surface is realized with
   three v1 simplifications, each an owned decision (not a delegation) with a named
   reason and a deferral gated on a real factor, not on "no consumer":

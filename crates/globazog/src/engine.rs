@@ -17,15 +17,15 @@ use crate::builder::{FollowLinks, Query};
 use crate::error::EntryError;
 use crate::predicate::{EntryType, MetaMask, eval_all};
 use crate::ring::{
-    CompletionRing, ContainerEnd, ContainerEnter, ContainerId, ContainerName, CqError, CqItem,
-    EntryMetaOwned, IdSpace, Match, Name, PatternMask, SqOp, SubmissionQueue, Terminal,
-    TerminalReason,
+    BlockReason, Blocked, CompletionRing, ContainerEnd, ContainerEnter, ContainerId, ContainerName,
+    CqError, CqItem, EntryMetaOwned, IdSpace, Match, Name, PatternMask, SqOp, SubmissionQueue,
+    Terminal, TerminalReason,
 };
 use crate::syntax::CodePoint;
 use crate::syntax::set::PatternSet;
 use crate::sys::{self, DirEntry, FileId};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
@@ -94,6 +94,33 @@ struct Engine {
     fatal_error: Mutex<Option<CqError>>,
     finished: AtomicBool,
     ids: IdSpace,
+    /// Canonical component keys of the roots for D-75 confinement (empty when
+    /// `confine_to_roots` is off). A followed reparse point whose canonicalized target
+    /// is not within one of these is declined instead of descended.
+    confined_roots: Vec<PathKey>,
+}
+
+/// The case-folded canonical component key of an (already-absolute) path, for D-75
+/// containment. Windows components are ordinal-upcased (D-28) so the ancestor test is
+/// case-insensitive there; other platforms are case-sensitive.
+type PathKey = Vec<Vec<CodePoint>>;
+
+fn canon_path_key(path: &Path) -> PathKey {
+    path.components()
+        .map(|c| {
+            let cps = sys::decode_name(c.as_os_str());
+            if cfg!(windows) {
+                cps.into_iter().map(crate::syntax::matcher::fold).collect()
+            } else {
+                cps
+            }
+        })
+        .collect()
+}
+
+/// Whether `target` is `root` or a descendant of it (component-wise prefix).
+fn within(root: &PathKey, target: &PathKey) -> bool {
+    target.len() >= root.len() && target[..root.len()] == root[..]
 }
 
 /// True once we have a real filesystem identity to key cycle detection on (the
@@ -339,7 +366,20 @@ impl Engine {
                 && eval_all(&self.query.descend, &meta)
                 && self.admit_descend(entry)
             {
-                self.launch_child(&job, entry);
+                // Root confinement (D-75): a followed reparse point whose real target
+                // escapes the roots is declined rather than descended, and announced.
+                if entry.is_reparse
+                    && self.query.options.confine_to_roots
+                    && self.escapes_confinement(&job, entry)
+                {
+                    self.emit(CqItem::Blocked(Blocked {
+                        container: job.container,
+                        name: Name::from_code_points(&entry.name),
+                        reason: BlockReason::RootEscape,
+                    }));
+                } else {
+                    self.launch_child(&job, entry);
+                }
             }
 
             path.pop();
@@ -357,6 +397,19 @@ impl Engine {
         }
         let mut sh = self.shared.lock().unwrap();
         sh.visited.insert(entry.file_id)
+    }
+
+    /// D-75 confinement gate: whether following `entry` (a reparse point under
+    /// `job.dir`) would leave the query roots. Fail-closed — a target that cannot be
+    /// canonicalized is treated as an escape, so a confined walk never follows a
+    /// reparse point it cannot prove stays inside.
+    fn escapes_confinement(&self, job: &ScanJob, entry: &DirEntry) -> bool {
+        let reparse_path = job.dir.join(sys::encode_os_name(&entry.name));
+        let Ok(target) = std::fs::canonicalize(&reparse_path) else {
+            return true;
+        };
+        let key = canon_path_key(&target);
+        !self.confined_roots.iter().any(|root| within(root, &key))
     }
 
     /// Push a mandatory item (a `ContainerEnd` / fatal error / terminal,
@@ -495,6 +548,20 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
     let permits = query.options.permits.max(1);
     let ids = IdSpace::new();
 
+    // D-75: canonicalize the roots once for the confinement containment test (only
+    // when confinement is on). A root that cannot be canonicalized is dropped — it
+    // cannot serve as a containment ancestor and would fail enumeration anyway.
+    let confined_roots: Vec<PathKey> = if query.options.confine_to_roots {
+        query
+            .roots
+            .iter()
+            .filter_map(|r| std::fs::canonicalize(&r.path).ok())
+            .map(|p| canon_path_key(&p))
+            .collect()
+    } else {
+        Vec::new()
+    };
+
     let mut shared = Shared {
         stack: Vec::new(),
         outstanding: 0,
@@ -548,6 +615,7 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
         fatal_error: Mutex::new(None),
         finished: AtomicBool::new(false),
         ids,
+        confined_roots,
     });
 
     let mut workers = Vec::with_capacity(permits);

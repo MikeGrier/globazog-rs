@@ -83,6 +83,11 @@ pub struct Options {
     pub follow_links: FollowLinks,
     /// The query-level case default applied when a pattern gives no override (D-23).
     pub default_case: Option<CaseSensitivity>,
+    /// Confine the walk to the query roots (D-75): a followed reparse point whose real
+    /// target resolves outside every root is not descended and yields a
+    /// [`CqItem::Blocked`](crate::CqItem::Blocked) `RootEscape` instead. Only affects
+    /// [`FollowLinks::Always`]; default `false`.
+    pub confine_to_roots: bool,
 }
 
 impl Default for Options {
@@ -93,6 +98,7 @@ impl Default for Options {
             cycle_detection: true,
             follow_links: FollowLinks::Never,
             default_case: None,
+            confine_to_roots: false,
         }
     }
 }
@@ -252,6 +258,14 @@ impl QueryBuilder {
     /// Set the reparse/symlink follow policy (D-72). Default `FollowLinks::Never`.
     pub fn follow_links(mut self, policy: FollowLinks) -> Self {
         self.options.follow_links = policy;
+        self
+    }
+
+    /// Confine the walk to the query roots so a followed reparse point cannot escape
+    /// them (D-75): an escaping target is not descended and yields a `CqItem::Blocked`
+    /// `RootEscape` instead. Only affects `FollowLinks::Always`; default `false`.
+    pub fn confine_to_roots(mut self, confine: bool) -> Self {
+        self.options.confine_to_roots = confine;
         self
     }
 

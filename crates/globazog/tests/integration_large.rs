@@ -422,6 +422,76 @@ fn follow_always_with_cycle_back_to_root_is_bounded_and_completes() {
     assert!(matches(&items) >= 1);
 }
 
+#[cfg(unix)]
+#[test]
+fn confine_to_roots_blocks_symlink_escape() {
+    use globazog::{BlockReason, FollowLinks};
+
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(outside.path().join("secret.dat"), b"x").unwrap();
+
+    // A real subdir inside the root with its own file.
+    let inside = root.path().join("inside");
+    fs::create_dir(&inside).unwrap();
+    fs::write(inside.join("in.dat"), b"x").unwrap();
+
+    // `escape` leaves the root; `stay` stays within it.
+    std::os::unix::fs::symlink(outside.path(), root.path().join("escape")).unwrap();
+    std::os::unix::fs::symlink(&inside, root.path().join("stay")).unwrap();
+
+    let dat_names = |items: &[CqItem]| -> Vec<String> {
+        items
+            .iter()
+            .filter_map(|i| match i {
+                CqItem::Match(m) => Some(m.name.to_string_lossy().to_string()),
+                _ => None,
+            })
+            .collect()
+    };
+
+    // Confined + follow: the escaping link is declined (its target's `secret.dat` is
+    // never reported) and one `Blocked{RootEscape}` names it; the in-root link is
+    // still followed (D-75).
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .follow_links(FollowLinks::Always)
+        .confine_to_roots(true)
+        .pattern("**/*.dat", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+    let names = dat_names(&items);
+    assert!(
+        !names.iter().any(|n| n == "secret.dat"),
+        "escaping link was followed under confinement: {names:?}"
+    );
+    assert!(names.iter().any(|n| n == "in.dat"));
+    let blocks: Vec<&CqItem> = items
+        .iter()
+        .filter(|i| matches!(i, CqItem::Blocked(_)))
+        .collect();
+    assert_eq!(blocks.len(), 1);
+    let CqItem::Blocked(b) = blocks[0] else {
+        unreachable!()
+    };
+    assert_eq!(b.reason, BlockReason::RootEscape);
+    assert_eq!(b.name.to_string_lossy(), "escape");
+
+    // Not confined: the escaping link IS followed, `secret.dat` appears, no `Blocked`.
+    let handle = QueryBuilder::new()
+        .root(root.path())
+        .follow_links(FollowLinks::Always)
+        .pattern("**/*.dat", Dialect::Posix, Vec::new())
+        .submit()
+        .unwrap();
+    let items = drain(&handle);
+    assert_eq!(terminal(&items), TerminalReason::Completed);
+    assert!(dat_names(&items).iter().any(|n| n == "secret.dat"));
+    assert!(!items.iter().any(|i| matches!(i, CqItem::Blocked(_))));
+}
+
 #[test]
 fn cancellation_still_balances_container_ends() {
     // Even when cancelled mid-flight, every `ContainerEnter` must get a
