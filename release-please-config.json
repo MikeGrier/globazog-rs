@@ -4,32 +4,9 @@
     "include-component-in-tag": false,
     "packages": {
         ".": {
-            "package-name": "{{project_name}}",
+            "package-name": "globazog",
             "extra-files": [
-                "Cargo.toml"{% if include_vscode_extension %},
-                {
-                    "type": "generic",
-                    "path": "crates/{{mcp_crate_name}}/Cargo.toml"
-                },
-                {
-                    "type": "json",
-                    "path": "crates/{{mcp_crate_name}}/extension/package.json",
-                    "jsonpath": "$.version"
-                },
-                {
-                    "type": "json",
-                    "path": "crates/{{mcp_crate_name}}/extension/package-lock.json",
-                    "jsonpath": "$.version"
-                },
-                {
-                    "type": "json",
-                    "path": "crates/{{mcp_crate_name}}/extension/package-lock.json",
-                    "jsonpath": "$.packages[''].version"
-                }{% elsif include_mcp %},
-                {
-                    "type": "generic",
-                    "path": "crates/{{mcp_crate_name}}/Cargo.toml"
-                }{% endif %}
+                "Cargo.toml"
             ]
         }
     }

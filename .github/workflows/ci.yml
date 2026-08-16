@@ -1,4 +1,4 @@
-# Copyright (c) {{license_year}} {{author_name}}. All rights reserved.
+# Copyright (c) 2026 Mike Grier. All rights reserved.
 name: ci
 
 on:
@@ -39,8 +39,17 @@ jobs:
         run: ./tools/check-encoding.ps1
 
   build-test:
-    name: build + test
-    runs-on: ubuntu-latest
+    name: build + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Cover both target platforms: the native Windows enumeration backend
+      # (`sys/win.rs`, unsafe FFI + record parsing) and its `#[cfg(windows)]`
+      # tests are only exercised on `windows-latest`; the Linux backend and its
+      # unix-gated tests only on `ubuntu-latest`. fail-fast off so one OS's
+      # failure doesn't mask the other's.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -76,8 +85,12 @@ jobs:
         run: cargo fmt --all --check
 
   clippy:
-    name: clippy
-    runs-on: ubuntu-latest
+    name: clippy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -88,14 +101,19 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
   msrv:
-    name: MSRV check (1.85)
-    runs-on: ubuntu-latest
+    name: MSRV check 1.97 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v5
       # Pin to the exact MSRV declared in [workspace.package].rust-version
       # so a stray use of a newer-stable feature fails CI rather than
-      # silently raising the floor for downstream consumers.
-      - uses: dtolnay/rust-toolchain@1.85.0
+      # silently raising the floor for downstream consumers. Checked on both
+      # platforms so a newer-stable API in the Windows-only backend is caught.
+      - uses: dtolnay/rust-toolchain@1.97.0
       - uses: Swatinem/rust-cache@v2
       - name: cargo check (MSRV)
         run: cargo check --workspace --all-targets --locked

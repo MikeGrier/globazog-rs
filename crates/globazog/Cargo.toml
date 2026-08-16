@@ -1,0 +1,36 @@
+# Copyright (c) 2026 Mike Grier
+
+[package]
+name        = "globazog"
+description = "A high-performance, Windows-first globbing and directory-traversal library for Rust."
+readme      = "README.md"
+version.workspace       = true
+authors.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+repository.workspace    = true
+homepage.workspace      = true
+documentation.workspace = true
+keywords    = ["glob", "globbing", "filesystem", "directory", "traversal"]
+categories  = ["filesystem"]
+
+[dependencies]
+crossbeam-queue = "0.3"
+bitflags        = "2"
+thiserror       = "2"
+
+# Windows enumeration backend (D-4, D-54): IOCP / NtQueryDirectoryFile /
+# CreateThreadpoolIo. Feature set is expanded in M5 as the backend lands.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+] }
+
+# Linux enumeration backend (D-6, D-54): openat / getdents64 / statx via rustix.
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+
+[dev-dependencies]
+tempfile = "3"

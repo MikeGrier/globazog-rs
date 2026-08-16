@@ -1,9 +1,8 @@
-# Copyright (c) {{license_year}} {{author_name}}
+# Copyright (c) 2026 Mike Grier
 name: release-please
 
 # Creates or updates a "Release PR" on every push to main.
-# When the Release PR is merged it creates the tag + GitHub Release,
-# which triggers publish-extension.yml.
+# When the Release PR is merged it creates the tag + GitHub Release.
 #
 # Commit message conventions that drive version bumps:
 #   fix: ...             -> patch  (0.1.2 -> 0.1.3)
@@ -13,13 +12,11 @@ name: release-please
 #
 # What the Release PR updates automatically:
 #   - [workspace.package].version in Cargo.toml
-#   - Cargo.lock (updated by the `update-lockfile` job below){% if include_vscode_extension %}
-#   - version in crates/{{mcp_crate_name}}/extension/package.json
-#   - version in crates/{{mcp_crate_name}}/extension/package-lock.json (root + packages[""]){% endif %}
+#   - Cargo.lock (updated by the `update-lockfile` job below)
 #   - CHANGELOG.md
 #
-# After merging the Release PR the tag v{version} is created.
-# publish-extension.yml triggers on `v*` tags.
+# After merging the Release PR the tag v{version} is created; a crates.io
+# publish workflow (tracked in COMPLETED-CHECKLIST.md, M1-6) triggers on that tag.
 
 on:
   push:
@@ -54,7 +51,7 @@ jobs:
           # scope, NOT `secrets.GITHUB_TOKEN`. GitHub suppresses workflow
           # triggers for events (tags, pushes) created by GITHUB_TOKEN, so
           # the v* tag that release-please creates on merge would never start
-          # publish-extension.yml. Store a PAT as the
+          # the downstream publish workflow. Store a PAT as the
           # `RELEASE_PLEASE_TOKEN` repository secret to enable those flows.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
