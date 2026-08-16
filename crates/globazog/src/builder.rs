@@ -19,7 +19,8 @@ use crate::syntax::dialect::Dialect;
 use crate::syntax::parse::{Anchor, parse};
 use crate::syntax::set::CompiledPattern;
 use crate::syntax::{CaseSensitivity, CodePoint, Pattern, PatternSegment};
-use std::path::PathBuf;
+use std::ffi::{OsStr, OsString};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -282,13 +283,31 @@ impl QueryBuilder {
             return Err(Error::Options("ring_capacity must be non-zero".into()));
         }
 
-        // Dedup supplied roots so `.root(p).root(p)` scans the tree once and matches
-        // are not double-emitted (D-37).
+        // Canonicalize + dedup supplied roots on an owned lexical key (D-35): fold
+        // `.`, normalize separators (via `Path::components`), case-fold on Windows
+        // (D-28); a `..` component is rejected (D-26/D-35 reject-not-resolve).
         let mut roots: Vec<Root> = Vec::new();
+        let mut root_keys: Vec<Vec<OsString>> = Vec::new();
         for r in &self.roots {
-            intern_root(&mut roots, Root::new(r.clone()));
+            intern_root(&mut roots, &mut root_keys, Root::new(r.clone()))?;
         }
         let explicit_roots = roots.len();
+        // Reject a supplied root nested under another supplied root (D-73/M11):
+        // silently dropping one would change the match set (a non-recursive pattern
+        // matches under the deeper root but not the shallower), and the full
+        // enumerate-once/emit-under-both merge (D-37) needs a deferred multi-frame
+        // model. Derived roots (below) are exempt: they carry distinct pattern sets.
+        for i in 0..explicit_roots {
+            for j in 0..explicit_roots {
+                if i != j && is_ancestor(&root_keys[i], &root_keys[j]) {
+                    return Err(Error::Options(format!(
+                        "root `{}` is nested under root `{}`; supply only one (D-73)",
+                        roots[j].path.display(),
+                        roots[i].path.display()
+                    )));
+                }
+            }
+        }
         let mut patterns: Vec<PatternEntry> = Vec::new();
         let mut has_relative = false;
 
@@ -320,7 +339,7 @@ impl QueryBuilder {
                 // root, never the supplied roots (D-38).
                 other => {
                     let (root, relative) = lower_self_rooting(other, parsed.pattern, &self.base)?;
-                    let idx = intern_root(&mut roots, root);
+                    let idx = intern_root(&mut roots, &mut root_keys, root)?;
                     (relative, other, vec![idx])
                 }
             };
@@ -374,14 +393,54 @@ impl QueryBuilder {
     }
 }
 
-/// Intern `root` into `roots`, returning its index (dedups equal seeds, D-35).
-fn intern_root(roots: &mut Vec<Root>, root: Root) -> usize {
-    if let Some(i) = roots.iter().position(|r| *r == root) {
-        i
-    } else {
-        roots.push(root);
-        roots.len() - 1
+/// Intern `root` into `roots`, deduping on its owned lexical canonical key (D-35)
+/// and returning its index. Fails only if the path contains a rejected `..`.
+fn intern_root(
+    roots: &mut Vec<Root>,
+    keys: &mut Vec<Vec<OsString>>,
+    root: Root,
+) -> Result<usize, Error> {
+    let key = canon_key(&root.path)?;
+    if let Some(i) = keys.iter().position(|k| *k == key) {
+        return Ok(i);
     }
+    keys.push(key);
+    roots.push(root);
+    Ok(roots.len() - 1)
+}
+
+/// The owned lexical canonical key of a root path (D-35), used only for dedup and
+/// overlap detection — the original path is preserved for enumeration. Folds `.`,
+/// normalizes separators (via `Path::components`), and case-folds on Windows (D-28);
+/// a `..` component is rejected (D-26/D-35 reject-not-resolve).
+fn canon_key(path: &Path) -> Result<Vec<OsString>, Error> {
+    use std::path::Component;
+    let mut key = Vec::new();
+    for comp in path.components() {
+        match comp {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                return Err(Error::Options("`..` is not allowed in a root path".into()));
+            }
+            other => key.push(fold_component(other.as_os_str())),
+        }
+    }
+    Ok(key)
+}
+
+/// Case-fold a path component for the canonical key: lowercase on Windows (ordinal
+/// case-insensitivity, D-28), verbatim elsewhere.
+fn fold_component(os: &OsStr) -> OsString {
+    if cfg!(windows) {
+        OsString::from(os.to_string_lossy().to_lowercase())
+    } else {
+        os.to_os_string()
+    }
+}
+
+/// Whether `a` is a strict lexical ancestor of `b` (a proper prefix of b's key).
+fn is_ancestor(a: &[OsString], b: &[OsString]) -> bool {
+    a.len() < b.len() && b[..a.len()] == *a
 }
 
 /// Lower a self-rooting pattern (D-33/D-34): derive its physical root from the

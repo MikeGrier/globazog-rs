@@ -234,6 +234,72 @@ fn duplicate_supplied_roots_are_deduped() {
 }
 
 #[test]
+fn lexically_equal_roots_are_deduped() {
+    // `.`-fold (D-35): `/data` and `/data/.` are the same root.
+    let q = QueryBuilder::new()
+        .root("/data")
+        .root("/data/.")
+        .pattern("*.txt", Dialect::Posix, empty_emit())
+        .build()
+        .unwrap();
+    assert_eq!(q.roots.len(), 1);
+}
+
+#[test]
+fn nested_supplied_roots_are_rejected() {
+    // D-73/M11: one supplied root nested under another is an error (dropping it would
+    // change the match set; the enumerate-once merge is deferred).
+    let r = QueryBuilder::new()
+        .root("/tmp")
+        .root("/tmp/sub")
+        .pattern("*.c", Dialect::Posix, empty_emit())
+        .build();
+    assert!(matches!(r, Err(Error::Options(_))));
+    // Order-independent: the descendant supplied first is rejected too.
+    let r = QueryBuilder::new()
+        .root("/tmp/sub")
+        .root("/tmp")
+        .pattern("*.c", Dialect::Posix, empty_emit())
+        .build();
+    assert!(matches!(r, Err(Error::Options(_))));
+}
+
+#[test]
+fn sibling_supplied_roots_are_allowed() {
+    let q = QueryBuilder::new()
+        .root("/a")
+        .root("/b")
+        .pattern("*.c", Dialect::Posix, empty_emit())
+        .build()
+        .unwrap();
+    assert_eq!(q.roots.len(), 2);
+}
+
+#[test]
+fn parent_dir_in_root_is_rejected() {
+    // `..` is rejected, not resolved (D-26/D-35), so overlap detection stays sound.
+    let r = QueryBuilder::new()
+        .root("/a/../b")
+        .pattern("*.c", Dialect::Posix, empty_emit())
+        .build();
+    assert!(matches!(r, Err(Error::Options(_))));
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_roots_dedup_case_insensitively() {
+    // D-28: Windows paths are case-insensitive, so `C:/Data` and `C:/data` are one
+    // root.
+    let q = QueryBuilder::new()
+        .root("C:/Data")
+        .root("C:/data")
+        .pattern("*.c", Dialect::Posix, empty_emit())
+        .build()
+        .unwrap();
+    assert_eq!(q.roots.len(), 1);
+}
+
+#[test]
 fn zero_ring_capacity_is_rejected() {
     let opts = Options {
         ring_capacity: 0,
