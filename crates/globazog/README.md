@@ -178,3 +178,21 @@ name-blob fast path. See [CHECKLIST.md](../../CHECKLIST.md) and [DESIGN-NOTES.md
 ## License
 
 MIT © Mike Grier
+
+<!-- API reference targets (this is a package README, not rustdoc, so the code-span
+     references above are made navigable with explicit docs.rs links). -->
+[`QueryBuilder`]: https://docs.rs/globazog/latest/globazog/struct.QueryBuilder.html
+[`QueryHandle`]: https://docs.rs/globazog/latest/globazog/struct.QueryHandle.html
+[`Options`]: https://docs.rs/globazog/latest/globazog/struct.Options.html
+[`CompletionRing`]: https://docs.rs/globazog/latest/globazog/struct.CompletionRing.html
+[`PatternMask`]: https://docs.rs/globazog/latest/globazog/struct.PatternMask.html
+[`CqItem`]: https://docs.rs/globazog/latest/globazog/enum.CqItem.html
+[`Dialect`]: https://docs.rs/globazog/latest/globazog/enum.Dialect.html
+[`Dialect::Posix`]: https://docs.rs/globazog/latest/globazog/enum.Dialect.html#variant.Posix
+[`Dialect::Win`]: https://docs.rs/globazog/latest/globazog/enum.Dialect.html#variant.Win
+[`Leaf`]: https://docs.rs/globazog/latest/globazog/enum.Leaf.html
+[`Leaf::name_exact`]: https://docs.rs/globazog/latest/globazog/enum.Leaf.html#method.name_exact
+[`Leaf::name_glob`]: https://docs.rs/globazog/latest/globazog/enum.Leaf.html#method.name_glob
+[`Leaf::name_contains`]: https://docs.rs/globazog/latest/globazog/enum.Leaf.html#method.name_contains
+[`Leaf::name_extension`]: https://docs.rs/globazog/latest/globazog/enum.Leaf.html#method.name_extension
+[`Leaf::name_in_set`]: https://docs.rs/globazog/latest/globazog/enum.Leaf.html#method.name_in_set
