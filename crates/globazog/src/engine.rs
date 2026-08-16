@@ -364,10 +364,12 @@ impl Engine {
                     self.query.patterns[i].roots.contains(&job.root)
                 })
                 && eval_all(&self.query.descend, &meta)
-                && self.admit_descend(entry)
             {
                 // Root confinement (D-75): a followed reparse point whose real target
                 // escapes the roots is declined rather than descended, and announced.
+                // Checked *before* `admit_descend` consumes the cycle-detection
+                // identity, so every escaping entry is reported per-entry even when two
+                // names share one filesystem identity (e.g. hard-linked symlinks).
                 if entry.is_reparse
                     && self.query.options.confine_to_roots
                     && self.escapes_confinement(&job, entry)
@@ -377,7 +379,7 @@ impl Engine {
                         name: Name::from_code_points(&entry.name),
                         reason: BlockReason::RootEscape,
                     }));
-                } else {
+                } else if self.admit_descend(entry) {
                     self.launch_child(&job, entry);
                 }
             }
