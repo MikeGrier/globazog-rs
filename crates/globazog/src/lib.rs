@@ -52,7 +52,7 @@
 //!   A single unreadable entry never discards its readable siblings.
 //! - [`CqItem::Blocked`] — a followed reparse point (symlink / junction) was **not**
 //!   descended because its target would escape the query roots under
-//!   [`confine_to_roots`](Options); the walk continues (D-75).
+//!   [`confine_to_roots`](Options::confine_to_roots); the walk continues (D-75).
 //! - [`CqItem::Terminal`] — the walk ended:
 //!   [`Completed`](TerminalReason::Completed) (ran to the end),
 //!   [`Cancelled`](TerminalReason::Cancelled) (a [`cancel`](QueryHandle::cancel) was
