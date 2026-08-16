@@ -501,6 +501,10 @@ impl CompletionRing {
         while self.queue.is_empty() {
             self.nonempty.wait();
         }
+        // Wake-propagation (mirrors `pop`): the ring is non-empty, so re-arm the
+        // coalesced signal in case a concurrent waiter's wake was collapsed into the
+        // one this call consumed — otherwise that waiter could block forever.
+        self.nonempty.notify();
     }
 }
 
