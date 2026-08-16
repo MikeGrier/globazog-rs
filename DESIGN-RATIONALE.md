@@ -19,11 +19,25 @@ migrated.
 
 - **Containment mechanism — canonicalize-and-compare vs file identity.** Chosen:
   canonicalize each candidate target and each root (`std::fs::canonicalize`) and compare
-  component-wise (D-28 fold on Windows). Rejected: keying on the `(volume, file-id)`
+  components **exactly** (no case fold). Rejected: keying on the `(volume, file-id)`
   identity the engine already fetches for cycle detection (D-51) — identity answers
   "same object," not "inside the roots' *path* subtree," and a target on a different
   volume has no identity relationship to a root at all. Path containment is the actual
   question, so a path primitive is the right tool.
+
+- **Exact component compare vs case fold.** Chosen: compare canonical components
+  **exactly**. An earlier revision folded components on Windows (D-28) to be
+  case-insensitive, but that is wrong: Windows now supports **per-directory case
+  sensitivity** (NTFS, common under WSL-managed trees), where `Foo` and `foo` are
+  genuinely distinct directories. Folding collapses them, so a junction targeting `foo`
+  would be judged contained by a root at `Foo` — an actual escape. The fold is also
+  unnecessary: `canonicalize` (Windows `GetFinalPathNameByHandle`) already returns each
+  component in its true on-disk casing, so on a case-insensitive volume the root and the
+  target resolve to the *same* stored casing and compare equal without folding. Exact
+  compare is therefore correct on both filesystem kinds; the fold was only ever correct
+  by accident on the case-insensitive default. Regression:
+  `engine::tests::windows_case_only_siblings_are_not_contained`.
+
 
 - **Fail-open vs fail-closed on an unresolvable target.** Chosen: **fail-closed** — a
   target that cannot be canonicalized (broken / inaccessible) is declined as

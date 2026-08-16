@@ -31,6 +31,9 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+#[cfg(test)]
+mod tests;
+
 /// One unit of work: scan a single directory (D-7).
 struct ScanJob {
     /// Physical path to enumerate.
@@ -100,21 +103,19 @@ struct Engine {
     confined_roots: Vec<PathKey>,
 }
 
-/// The case-folded canonical component key of an (already-absolute) path, for D-75
-/// containment. Windows components are ordinal-upcased (D-28) so the ancestor test is
-/// case-insensitive there; other platforms are case-sensitive.
+/// The canonical component key of an (already-canonicalized) path, for D-75
+/// containment. Components are compared **exactly** (no case fold):
+/// `std::fs::canonicalize` — on Windows `GetFinalPathNameByHandle` — already returns
+/// each component in its true on-disk casing, so a case-insensitive volume matches a
+/// root by that stored casing, while genuinely distinct siblings on a
+/// per-directory-case-sensitive tree (`Foo` vs `foo`, common under WSL-managed dirs)
+/// stay distinct. Folding here would collapse such siblings and let a reparse point
+/// targeting `foo` escape a root at `Foo`.
 type PathKey = Vec<Vec<CodePoint>>;
 
 fn canon_path_key(path: &Path) -> PathKey {
     path.components()
-        .map(|c| {
-            let cps = sys::decode_name(c.as_os_str());
-            if cfg!(windows) {
-                cps.into_iter().map(crate::syntax::matcher::fold).collect()
-            } else {
-                cps
-            }
-        })
+        .map(|c| sys::decode_name(c.as_os_str()))
         .collect()
 }
 
