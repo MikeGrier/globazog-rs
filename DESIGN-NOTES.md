@@ -2,7 +2,9 @@
 
 (Crate name **globazog**; repository is `globbinobulous-rs`.)
 
-Status: **design in progress** (no code yet). This file records what has been
+Status: **implemented** — milestones **M1–M11** are complete (archived in
+[COMPLETED-CHECKLIST.md](COMPLETED-CHECKLIST.md); status index in [PLANS.md](PLANS.md)).
+This file records what has been
 **decided** and what remains **open** from the design conversation. Decisions are
 given stable IDs (`D-n`) so later checklists / code can cite them. "Pattern is
 gospel" and "we define our behavior, dependencies merely satisfy it" (repo
@@ -94,8 +96,10 @@ Last updated: 2026-08-14.
   requests identity for *every* entry and is honored uniformly by all backends). The
   Linux backend keeps `getdents64`'s `d_type` for type/reparse and calls `statx` only
   when the plan needs a field or `d_type` is `Unknown`; the portable backend skips its
-  per-entry `lstat` likewise. The Windows listing is inline, so the plan is a no-op
-  there.*
+  per-entry `lstat` likewise. On Windows the stat-tier fields are inline (free), so the
+  plan is a no-op for those; the **file-identity** request (`want_file_id` /
+  `want_reparse_file_id`) still gates the separate `FileIdInfo` volume-serial query and
+  whether the inline id is kept.*
 - **D-14. Two orthogonal predicates** (revised from three): *emit this entry?* and
   *descend into this dir?* — **prune is not a separate predicate**: pruning a
   subtree ≡ `descend = false` (as in `find -prune`), so a user prune-rule is just
@@ -538,8 +542,9 @@ escaping that follows.
   change the **match set**, not just paths (a non-recursive pattern like `*.c` matches
   under the deeper root but not the shallower, since the shallower sees it two segments
   deep). The full D-37 "enumerate once, emit under every applicable `(root, rel)` frame"
-  merge needs a multi-frame directory model and is deferred (tracked in
-  [CHECKLIST.md](CHECKLIST.md) → M11 history). **Derived** roots from anchored patterns
+  merge needs a multi-frame directory model and is deferred (queued as `M∞-3` in
+  [CHECKLIST.md](CHECKLIST.md); the M11 decision history is in
+  [COMPLETED-CHECKLIST.md](COMPLETED-CHECKLIST.md)). **Derived** roots from anchored patterns
   (D-38) are canonicalized and deduped the same way but are **not** overlap-rejected:
   they carry distinct applicable-pattern sets and legitimately nest under a supplied root
   (the anchored + relative mix), so they keep their own per-root enumeration.
@@ -584,7 +589,8 @@ escaping that follows.
     across a ring push). This yields bottom-up ends and enter-before-children by
     construction. **The 1:1 enter/end guarantee holds even under cancellation/fatal
     error:** a container is tracked as *open* the moment its `ContainerEnter` is
-    emitted; ends are emitted cancel-immune (`push_blocking`) and idempotently (guarded
+    emitted; ends are emitted cancel-immune (`Engine::push_mandatory`, a timed recheck
+    loop safe for concurrent workers) and idempotently (guarded
     by the open-set), and after the workers join the coordinator closes any container
     still open — including a subtree the cancel abandoned before its refcount reached
     zero — bottom-up, *before* the terminal. So a client never reaches the terminal
