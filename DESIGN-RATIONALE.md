@@ -8,7 +8,8 @@ authoritative for *what* the current contract is; this file explains *why*. If t
 ever disagree, Tier 1 wins.
 
 This file is bootstrapped with the newest decision that carries substantive tradeoffs;
-older decisions' rationale still lives inline in DESIGN-NOTES.md until migrated.
+older decisions' rationale still lives inline in [DESIGN-NOTES.md](DESIGN-NOTES.md) until
+migrated.
 
 ## D-75. Root confinement against reparse-point escape
 
