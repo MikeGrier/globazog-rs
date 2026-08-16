@@ -10,14 +10,27 @@ fn empty_emit() -> Vec<Leaf> {
     Vec::new()
 }
 
+/// A platform-absolute directory path for tests: posix-absolute on Unix, `C:`-drive-
+/// absolute on Windows, so it satisfies the D-74 absolute-root requirement on both.
+fn aroot(posix: &str) -> std::path::PathBuf {
+    #[cfg(windows)]
+    {
+        std::path::PathBuf::from(format!("C:{posix}"))
+    }
+    #[cfg(not(windows))]
+    {
+        std::path::PathBuf::from(posix)
+    }
+}
+
 #[test]
 fn relative_pattern_binds_to_explicit_root() {
     let q = QueryBuilder::new()
-        .root("/home/user")
+        .root(aroot("/home/user"))
         .pattern("**/*.rs", Dialect::Posix, empty_emit())
         .build()
         .unwrap();
-    assert_eq!(q.roots, vec![Root::new("/home/user")]);
+    assert_eq!(q.roots, vec![Root::new(aroot("/home/user"))]);
     assert_eq!(q.patterns.len(), 1);
     assert_eq!(q.patterns[0].glob.anchor, Anchor::Relative);
     assert_eq!(q.patterns[0].glob.case, CaseSensitivity::Sensitive);
@@ -81,7 +94,7 @@ fn posix_absolute_all_literal_keeps_final_segment() {
 #[test]
 fn case_override_applies() {
     let q = QueryBuilder::new()
-        .root("/data")
+        .root(aroot("/data"))
         .pattern_cased(
             "*.TXT",
             Dialect::Posix,
@@ -100,7 +113,7 @@ fn query_level_default_case_applies_when_pattern_gives_none() {
         ..Options::default()
     };
     let q = QueryBuilder::new()
-        .root("/data")
+        .root(aroot("/data"))
         .options(opts)
         .pattern("*.txt", Dialect::Posix, empty_emit())
         .build()
@@ -139,7 +152,7 @@ fn anchored_pattern_scopes_to_its_own_root_only() {
 #[test]
 fn fetch_mask_unions_emit_descend_and_result_shape() {
     let q = QueryBuilder::new()
-        .root("/data")
+        .root(aroot("/data"))
         .pattern(
             "*.log",
             Dialect::Posix,
@@ -162,14 +175,14 @@ fn fetch_mask_unions_emit_descend_and_result_shape() {
 #[test]
 fn follow_links_defaults_to_never_and_is_settable() {
     let q = QueryBuilder::new()
-        .root("/data")
+        .root(aroot("/data"))
         .pattern("*.txt", Dialect::Posix, empty_emit())
         .build()
         .unwrap();
     assert_eq!(q.options.follow_links, FollowLinks::Never);
 
     let q = QueryBuilder::new()
-        .root("/data")
+        .root(aroot("/data"))
         .follow_links(FollowLinks::Always)
         .pattern("*.txt", Dialect::Posix, empty_emit())
         .build()
@@ -224,12 +237,12 @@ fn win_dialect_unsupported_off_windows() {
 fn duplicate_supplied_roots_are_deduped() {
     // `.root(p).root(p)` must scan the tree once, not twice (D-37).
     let q = QueryBuilder::new()
-        .root("/data")
-        .root("/data")
+        .root(aroot("/data"))
+        .root(aroot("/data"))
         .pattern("*.txt", Dialect::Posix, empty_emit())
         .build()
         .unwrap();
-    assert_eq!(q.roots, vec![Root::new("/data")]);
+    assert_eq!(q.roots, vec![Root::new(aroot("/data"))]);
     assert_eq!(q.patterns[0].roots, vec![0]);
 }
 
@@ -237,8 +250,8 @@ fn duplicate_supplied_roots_are_deduped() {
 fn lexically_equal_roots_are_deduped() {
     // `.`-fold (D-35): `/data` and `/data/.` are the same root.
     let q = QueryBuilder::new()
-        .root("/data")
-        .root("/data/.")
+        .root(aroot("/data"))
+        .root(aroot("/data/."))
         .pattern("*.txt", Dialect::Posix, empty_emit())
         .build()
         .unwrap();
@@ -250,15 +263,15 @@ fn nested_supplied_roots_are_rejected() {
     // D-73/M11: one supplied root nested under another is an error (dropping it would
     // change the match set; the enumerate-once merge is deferred).
     let r = QueryBuilder::new()
-        .root("/tmp")
-        .root("/tmp/sub")
+        .root(aroot("/tmp"))
+        .root(aroot("/tmp/sub"))
         .pattern("*.c", Dialect::Posix, empty_emit())
         .build();
     assert!(matches!(r, Err(Error::Options(_))));
     // Order-independent: the descendant supplied first is rejected too.
     let r = QueryBuilder::new()
-        .root("/tmp/sub")
-        .root("/tmp")
+        .root(aroot("/tmp/sub"))
+        .root(aroot("/tmp"))
         .pattern("*.c", Dialect::Posix, empty_emit())
         .build();
     assert!(matches!(r, Err(Error::Options(_))));
@@ -267,8 +280,8 @@ fn nested_supplied_roots_are_rejected() {
 #[test]
 fn sibling_supplied_roots_are_allowed() {
     let q = QueryBuilder::new()
-        .root("/a")
-        .root("/b")
+        .root(aroot("/a"))
+        .root(aroot("/b"))
         .pattern("*.c", Dialect::Posix, empty_emit())
         .build()
         .unwrap();
@@ -279,7 +292,7 @@ fn sibling_supplied_roots_are_allowed() {
 fn parent_dir_in_root_is_rejected() {
     // `..` is rejected, not resolved (D-26/D-35), so overlap detection stays sound.
     let r = QueryBuilder::new()
-        .root("/a/../b")
+        .root(aroot("/a/../b"))
         .pattern("*.c", Dialect::Posix, empty_emit())
         .build();
     assert!(matches!(r, Err(Error::Options(_))));
@@ -304,10 +317,11 @@ fn windows_roots_dedup_case_insensitively() {
 fn windows_roots_with_distinct_unpaired_surrogates_stay_separate() {
     use std::ffi::OsString;
     use std::os::windows::ffi::OsStringExt;
-    // Two roots differing only in an unpaired surrogate must stay distinct: keying on
-    // `to_string_lossy` would collapse both to U+FFFD and wrongly merge them (D-46).
-    let a = OsString::from_wide(&[b'r' as u16, 0xD800]);
-    let b = OsString::from_wide(&[b'r' as u16, 0xDC00]);
+    // Two absolute roots differing only in an unpaired surrogate must stay distinct:
+    // keying on `to_string_lossy` would collapse both to U+FFFD and wrongly merge them
+    // (D-46). Prefixed with `C:\` so they satisfy the D-74 absolute-root rule.
+    let a = OsString::from_wide(&['C' as u16, ':' as u16, '\\' as u16, b'r' as u16, 0xD800]);
+    let b = OsString::from_wide(&['C' as u16, ':' as u16, '\\' as u16, b'r' as u16, 0xDC00]);
     let q = QueryBuilder::new()
         .root(a)
         .root(b)
@@ -324,9 +338,32 @@ fn zero_ring_capacity_is_rejected() {
         ..Options::default()
     };
     let r = QueryBuilder::new()
-        .root("/data")
+        .root(aroot("/data"))
         .options(opts)
         .pattern("*.txt", Dialect::Posix, empty_emit())
+        .build();
+    assert!(matches!(r, Err(Error::Options(_))));
+}
+
+#[test]
+fn relative_root_is_rejected() {
+    // D-74: a relative root would be opened against the process CWD by the worker
+    // threads, racing any concurrent CWD change; the caller must resolve it first.
+    let r = QueryBuilder::new()
+        .root("relative/dir")
+        .pattern("*.c", Dialect::Posix, empty_emit())
+        .build();
+    assert!(matches!(r, Err(Error::Options(_))));
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_drive_relative_root_is_rejected() {
+    // On Windows a leading-separator path is drive-relative (a per-drive CWD global),
+    // so D-74 rejects it too.
+    let r = QueryBuilder::new()
+        .root("/data")
+        .pattern("*.c", Dialect::Posix, empty_emit())
         .build();
     assert!(matches!(r, Err(Error::Options(_))));
 }

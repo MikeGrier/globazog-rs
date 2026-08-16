@@ -44,9 +44,10 @@ globazog = "0.1"
 ```rust,no_run
 use globazog::{CqItem, Dialect, QueryBuilder};
 
-// Every `*.rs` under the current directory, recursively.
+// Every `*.rs` under the current directory, recursively. Roots must be absolute
+// (D-74), so resolve the CWD at your edge.
 let handle = QueryBuilder::new()
-    .root(".")
+    .root(std::env::current_dir().expect("current dir"))
     .pattern("**/*.rs", Dialect::Posix, Vec::new())
     .submit()
     .expect("valid query");
@@ -98,7 +99,7 @@ Beyond the glob, each entry can be filtered by declarative [`Leaf`] conditions
 use globazog::{Cmp, Dialect, Leaf, QueryBuilder};
 
 let handle = QueryBuilder::new()
-    .root(".")
+    .root(std::env::current_dir().expect("current dir"))
     // Only emit logs larger than 1 KiB.
     .pattern("**/*.log", Dialect::Posix, vec![Leaf::Size { op: Cmp::Gt, value: 1024 }])
     // Never descend into reparse points (junctions / symlinked dirs).

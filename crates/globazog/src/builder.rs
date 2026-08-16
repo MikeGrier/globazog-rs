@@ -394,7 +394,8 @@ impl QueryBuilder {
 }
 
 /// Intern `root` into `roots`, deduping on its owned lexical canonical key (D-35)
-/// and returning its index. Fails only if the path contains a rejected `..`.
+/// and returning its index. Fails if the path is non-absolute (D-74) or contains a
+/// rejected `..` (D-26/D-35).
 fn intern_root(roots: &mut Vec<Root>, keys: &mut Vec<RootKey>, root: Root) -> Result<usize, Error> {
     let key = canon_key(&root.path)?;
     if let Some(i) = keys.iter().position(|k| *k == key) {
@@ -414,9 +415,20 @@ type RootKey = Vec<Vec<CodePoint>>;
 /// The owned lexical canonical key of a root path (D-35), used only for dedup and
 /// overlap detection — the original path is preserved for enumeration. Folds `.`,
 /// normalizes separators (via `Path::components`); a `..` component is rejected
-/// (D-26/D-35 reject-not-resolve).
+/// (D-26/D-35 reject-not-resolve), and a non-absolute root is rejected (D-74).
 fn canon_key(path: &Path) -> Result<RootKey, Error> {
     use std::path::Component;
+    // A relative (or Windows drive-relative) root would be opened by the worker
+    // threads against the process-wide current directory/drive, racing any concurrent
+    // CWD change (D-74/D-32). The library reads no such global; the caller resolves it
+    // at their edge (e.g. `std::env::current_dir()`).
+    if !path.is_absolute() {
+        return Err(Error::Options(format!(
+            "root must be an absolute path, got `{}` — resolve relative roots at your \
+             edge (e.g. `std::env::current_dir()?`) before passing them (D-74)",
+            path.display()
+        )));
+    }
     let mut key = RootKey::new();
     for comp in path.components() {
         match comp {

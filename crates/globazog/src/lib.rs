@@ -13,9 +13,10 @@
 //! ```no_run
 //! use globazog::{CqItem, Dialect, QueryBuilder};
 //!
-//! // Every `*.rs` under the current directory, recursively.
+//! // Every `*.rs` under the current directory, recursively. Roots must be absolute
+//! // (D-74), so resolve the CWD at your edge.
 //! let handle = QueryBuilder::new()
-//!     .root(".")
+//!     .root(std::env::current_dir().expect("current dir"))
 //!     .pattern("**/*.rs", Dialect::Posix, Vec::new())
 //!     .submit()
 //!     .expect("valid query");

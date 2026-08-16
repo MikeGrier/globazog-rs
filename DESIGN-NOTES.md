@@ -548,6 +548,16 @@ escaping that follows.
   (D-38) are canonicalized and deduped the same way but are **not** overlap-rejected:
   they carry distinct applicable-pattern sets and legitimately nest under a supplied root
   (the anchored + relative mix), so they keep their own per-root enumeration.
+- **D-74. Roots must be absolute (realizes D-32 for roots).** `build()` rejects any
+  non-absolute root with `Error::Options` (checked in `canon_key` via
+  `Path::is_absolute`, so it also rejects a Windows drive-relative `\foo` and a
+  `C:foo`). A relative root would be opened by the background worker threads against
+  the **process-wide** current directory (and, on Windows, the per-drive current
+  directory) — a global the library refuses to read (D-32) and that another thread
+  could change mid-walk, silently switching the tree a child scan resolves against.
+  Resolution is the caller's job at their edge (e.g. `std::env::current_dir()?`),
+  matching the D-34 "one honest one-shot CWD read at the caller's edge" stance. This
+  supersedes the old convenience of a bare `.root(\".\")`, which now errors.
 - **D-69. Ring implementation choices (M6).** The ring/API surface is realized with
   three v1 simplifications, each an owned decision (not a delegation) with a named
   reason and a deferral gated on a real factor, not on "no consumer":
