@@ -30,6 +30,13 @@ mod tests;
 /// A filesystem object identity for cycle detection (D-51): volume + file id. The
 /// portable backend fills this only where the platform exposes it cheaply (Unix
 /// `dev`/`ino`); the native backends provide it always.
+///
+/// Identity is the **whole `(volume, id)` pair** — `Eq`/`Hash` cover both fields —
+/// because a file id is only unique *within* a volume, so ids may repeat across
+/// volumes and must stay distinct. A backend that cannot obtain the volume must leave
+/// the **entire** struct zero (`{0,0}` = unknown, treated as cycle-detection
+/// pass-through), never a volume-less id: a `(0, id)` value would spuriously collide
+/// with the same `id` on another volume.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FileId {
     /// Volume identity (Unix `st_dev`; Windows volume serial — native only).

@@ -96,7 +96,9 @@ struct Engine {
     ids: IdSpace,
 }
 
-/// True once we have a real filesystem identity (portable Windows leaves it zero).
+/// True once we have a real filesystem identity to key cycle detection on (the
+/// unknown sentinel is `{0,0}`; see [`FileId`]). A partial `(0, id)` is never emitted,
+/// so testing either field non-zero is sufficient.
 fn file_id_known(id: FileId) -> bool {
     id.volume != 0 || id.id != 0
 }
