@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.0](https://github.com/MikeGrier/globazog-rs/compare/v0.1.2...v0.2.0) (2026-08-16)
+
+
+### Features
+
+* add confine_to_roots to block reparse-point escape of query roots (D-75) ([7cef649](https://github.com/MikeGrier/globazog-rs/commit/7cef6492060ab9a7a360bd2388c5c8f8a20fb805))
+* confine_to_roots — block reparse-point escape of query roots (D-75) ([2b83820](https://github.com/MikeGrier/globazog-rs/commit/2b838202447f3900f0d98aff4e4d0da956253e73))
+
+
+### Bug Fixes
+
+* canonicalize confinement roots only when links are followed (D-75) ([95ba44f](https://github.com/MikeGrier/globazog-rs/commit/95ba44f3492fc00a08f03809a32c6cdef0ddd11c))
+* check confinement before cycle detection so each escaping entry is reported (D-75) ([ddf0c5e](https://github.com/MikeGrier/globazog-rs/commit/ddf0c5e2ea31e9fc9f93816631983dc4923e62b9))
+* compare confinement paths case-sensitively to prevent case-fold root escape (D-75) ([1755f1f](https://github.com/MikeGrier/globazog-rs/commit/1755f1f812637de850db1039652dad4817f1e8cd))
+* mark Blocked #[non_exhaustive] to keep a future decision token non-breaking (D-75) ([d1cff61](https://github.com/MikeGrier/globazog-rs/commit/d1cff614601165f284fe324b035ad7cef87d3261))
+* mark CqItem non_exhaustive so future CQ variants are not breaking; correct the dropped-root confinement comment ([9f22d08](https://github.com/MikeGrier/globazog-rs/commit/9f22d08b7fb6786d3468808ce7b6c0cdd72d1037))
+
 ## [0.1.2](https://github.com/MikeGrier/globazog-rs/compare/v0.1.1...v0.1.2) (2026-08-16)
 
 
