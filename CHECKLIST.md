@@ -55,9 +55,11 @@ completed M7.
   missing consumer.
 
 - [ ] **M∞-2. Syscall-level FS-filter pushdown** (D-19, D-70): at a terminal literal
-  pattern segment, push a name filter into the enumeration syscall
-  (`FindFirstFileW` wildcard / `readdir` prefix) instead of enumerating the whole
-  directory and matching in-process. Sound because the pattern is gospel (D-19); the
+  pattern segment, push a name filter into the enumeration syscall **where the API
+  accepts one** — the Windows `FindFirstFileW` wildcard — instead of enumerating the
+  whole directory and matching in-process. Linux `getdents64` / `readdir` has **no**
+  kernel-side name or prefix filter, so it **retains in-process filtering** (no
+  pushdown there). Sound because the pattern is gospel (D-19); the
   in-process descend pruning already bounds *which directories* are scanned, so this
   is a pure per-directory perf add. **Gated on** profiling, not a missing consumer.
 
