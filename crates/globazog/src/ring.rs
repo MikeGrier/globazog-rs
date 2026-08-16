@@ -332,7 +332,11 @@ pub struct Terminal {
 }
 
 /// One completion-queue item (D-64, D-65). Owned; popped by value (D-68).
+///
+/// `#[non_exhaustive]`: the CQ stream is expected to grow new item kinds, so match it
+/// with a wildcard arm and treat unknown items as ignorable.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum CqItem {
     /// A directory scan started.
     ContainerEnter(ContainerEnter),

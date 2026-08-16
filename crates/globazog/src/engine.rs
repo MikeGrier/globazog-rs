@@ -549,8 +549,10 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
     let ids = IdSpace::new();
 
     // D-75: canonicalize the roots once for the confinement containment test (only
-    // when confinement is on). A root that cannot be canonicalized is dropped — it
-    // cannot serve as a containment ancestor and would fail enumeration anyway.
+    // when confinement is on). A root that cannot be canonicalized is dropped from the
+    // confinement set — it cannot serve as a containment ancestor. This only *tightens*
+    // confinement (a target that would have resolved inside that root is then declined
+    // as `RootEscape`), consistent with the fail-closed policy.
     let confined_roots: Vec<PathKey> = if query.options.confine_to_roots {
         query
             .roots
