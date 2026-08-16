@@ -331,12 +331,14 @@ fn unopenable_root_terminates_with_failed() {
     let n = items.len();
     assert!(matches!(items[n - 2], CqItem::Error(_)));
     assert!(matches!(&items[n - 1], CqItem::Terminal(t) if t.reason == TerminalReason::Failed));
-    // A root open failure is scoped to no container and names no single entry (D-53).
+    // A root open failure is scoped to no container and names no single entry (D-53),
+    // but still reports which root frame failed (D-38).
     let CqItem::Error(e) = &items[n - 2] else {
         unreachable!()
     };
     assert!(e.container.is_none());
     assert!(e.error.name.is_none());
+    assert_eq!(e.root, Some(0));
 }
 
 #[cfg(unix)]

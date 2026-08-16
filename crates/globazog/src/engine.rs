@@ -231,6 +231,7 @@ impl Engine {
                 };
                 let cq_err = CqError {
                     container: job.parent,
+                    root: Some(job.root as u32),
                     error: EntryError { name, source: err },
                 };
                 if job.parent.is_none() {
@@ -272,6 +273,7 @@ impl Engine {
         for failure in scan.entry_errors {
             self.emit(CqItem::Error(CqError {
                 container: Some(job.container),
+                root: Some(job.root as u32),
                 error: EntryError {
                     name: failure.name.map(|cp| Name::from_code_points(&cp)),
                     source: failure.source,

@@ -288,6 +288,11 @@ pub struct Match {
 pub struct CqError {
     /// The enclosing container, if the failure is attributable to one.
     pub container: Option<ContainerId>,
+    /// The index into the query's roots ([`crate::QueryHandle::roots`]) of the
+    /// traversal frame the failure arose in (D-38). Lets a multi-root query attribute
+    /// a failure to a specific root even when no container was announced — e.g. an
+    /// unopenable root, where `container` is `None`.
+    pub root: Option<u32>,
     /// The underlying failure.
     pub error: EntryError,
 }
