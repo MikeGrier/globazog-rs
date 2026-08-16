@@ -467,7 +467,14 @@ fn confine_to_roots_blocks_symlink_escape() {
         !names.iter().any(|n| n == "secret.dat"),
         "escaping link was followed under confinement: {names:?}"
     );
-    assert!(names.iter().any(|n| n == "in.dat"));
+    // `in.dat` must appear twice: once via the real `inside` dir and once via the
+    // in-root `stay` symlink — proving the confined in-root descent actually happened
+    // rather than being skipped.
+    assert_eq!(
+        names.iter().filter(|n| *n == "in.dat").count(),
+        2,
+        "in-root symlink was not followed under confinement: {names:?}"
+    );
     let blocks: Vec<&CqItem> = items
         .iter()
         .filter(|i| matches!(i, CqItem::Blocked(_)))
@@ -588,7 +595,14 @@ fn confine_boundary_and_multiple_roots() {
         })
         .collect();
     // `to_b` resolves into a supplied root → allowed; the string-prefix sibling is not.
-    assert!(names.iter().any(|n| n == "b.dat"));
+    // `b.dat` must appear twice: once from scanning `root_b` directly and once through
+    // the `to_b` symlink, proving the cross-root descent was actually followed (not just
+    // reached via the direct root).
+    assert_eq!(
+        names.iter().filter(|n| *n == "b.dat").count(),
+        2,
+        "cross-root symlink was not followed: {names:?}"
+    );
     assert!(!names.iter().any(|n| n == "s.dat"));
     let blocked: Vec<String> = items
         .iter()
@@ -702,9 +716,9 @@ fn confine_to_roots_blocks_junction_escape() {
     fs::create_dir(&inside).unwrap();
     fs::write(inside.join("in.dat"), b"x").unwrap();
 
-    if !make_junction(&root.path().join("escape"), outside.path()) {
-        return; // junction creation unsupported in this environment; nothing to verify
-    }
+    // Junctions need no elevated privilege, so creation must succeed in the harness;
+    // a failure is a real regression, not a reason to skip the coverage.
+    assert!(make_junction(&root.path().join("escape"), outside.path()));
     assert!(make_junction(&root.path().join("stay"), &inside));
 
     let handle = QueryBuilder::new()
@@ -728,7 +742,13 @@ fn confine_to_roots_blocks_junction_escape() {
         !names.iter().any(|n| n == "secret.dat"),
         "escaping junction was followed under confinement: {names:?}"
     );
-    assert!(names.iter().any(|n| n == "in.dat"));
+    // `in.dat` must appear twice: via the real `inside` dir and via the in-root `stay`
+    // junction — proving the in-root junction descent actually happened.
+    assert_eq!(
+        names.iter().filter(|n| *n == "in.dat").count(),
+        2,
+        "in-root junction was not followed under confinement: {names:?}"
+    );
 
     let blocked: Vec<String> = items
         .iter()
