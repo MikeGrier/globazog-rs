@@ -548,21 +548,25 @@ pub fn spawn(query: Query, ring: Arc<CompletionRing>, sq: Arc<SubmissionQueue>) 
     let permits = query.options.permits.max(1);
     let ids = IdSpace::new();
 
-    // D-75: canonicalize the roots once for the confinement containment test (only
-    // when confinement is on). A root that cannot be canonicalized is dropped from the
-    // confinement set — it cannot serve as a containment ancestor. This only *tightens*
-    // confinement (a target that would have resolved inside that root is then declined
-    // as `RootEscape`), consistent with the fail-closed policy.
-    let confined_roots: Vec<PathKey> = if query.options.confine_to_roots {
-        query
-            .roots
-            .iter()
-            .filter_map(|r| std::fs::canonicalize(&r.path).ok())
-            .map(|p| canon_path_key(&p))
-            .collect()
-    } else {
-        Vec::new()
-    };
+    // D-75: canonicalize the roots once for the confinement containment test. Only
+    // when confinement is on **and** links are actually followed — under
+    // `FollowLinks::Never` no reparse descent happens, so the check never runs and this
+    // (potentially network) filesystem I/O in `submit()` would be wasted. A root that
+    // cannot be canonicalized is dropped from the confinement set — it cannot serve as a
+    // containment ancestor. This only *tightens* confinement (a target that would have
+    // resolved inside that root is then declined as `RootEscape`), consistent with the
+    // fail-closed policy.
+    let confined_roots: Vec<PathKey> =
+        if query.options.confine_to_roots && query.options.follow_links == FollowLinks::Always {
+            query
+                .roots
+                .iter()
+                .filter_map(|r| std::fs::canonicalize(&r.path).ok())
+                .map(|p| canon_path_key(&p))
+                .collect()
+        } else {
+            Vec::new()
+        };
 
     let mut shared = Shared {
         stack: Vec::new(),
