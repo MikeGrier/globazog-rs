@@ -69,10 +69,12 @@
 //! [`pattern`](QueryBuilder::pattern)) and the query takes one **descend** filter
 //! ([`descend`](QueryBuilder::descend)); both are AND-only conjunctions of [`Leaf`]
 //! conditions evaluated inline. The ring is **bounded and never drops** — a slow
-//! consumer simply throttles the walk (D-11). [`QueryHandle::cancel`] stops early
-//! (you still get a `Cancelled` terminal after queued items), and dropping the
-//! handle cancels and joins the engine threads. See [`Options`] to tune the permit
-//! count, ring capacity, and cycle detection.
+//! consumer simply throttles the walk (D-11). [`QueryHandle::cancel`] stops early:
+//! you still get a terminal after the already-queued items — `Cancelled` when the
+//! request is honored before the walk finishes, or `Completed` if the cancel lost the
+//! race with normal completion (so a `Completed` after a `cancel()` is **not** a
+//! contract violation). Dropping the handle cancels and joins the engine threads. See
+//! [`Options`] to tune the permit count, ring capacity, and cycle detection.
 //!
 //! # Dialects and brace escaping (D-45)
 //!

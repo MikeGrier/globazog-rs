@@ -144,9 +144,11 @@ own parent chain.
 [`Options`] tunes `permits` (concurrent scans), `ring_capacity`, `cycle_detection`,
 and a query-level case default. The ring is **bounded and never drops**: when it
 fills, the engine parks its workers until you drain — so a slow consumer simply slows
-the walk. Call `handle.cancel()` to stop early; you will still receive a
-`Terminal { reason: Cancelled }` after the items already queued. Dropping the
-`QueryHandle` cancels and joins the engine threads.
+the walk. Call `handle.cancel()` to stop early; you will still receive a terminal after
+the already-queued items — `Terminal { reason: Cancelled }` when the request is honored
+before the walk finishes, or `Completed` if the cancel raced with normal completion (a
+`Completed` after `cancel()` is not a contract violation). Dropping the `QueryHandle`
+cancels and joins the engine threads.
 
 ## Building a tool
 
